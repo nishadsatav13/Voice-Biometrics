@@ -1,5 +1,1 @@
 .venv/
-dataset/
-processed_data/
-savee_dataset/
-*.h5
