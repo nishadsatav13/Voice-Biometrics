@@ -1,0 +1,6 @@
+tensorflow>=2.10
+numpy
+librosa
+sounddevice
+scipy
+vosk

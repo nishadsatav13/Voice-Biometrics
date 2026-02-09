@@ -1,1 +1,19 @@
-.venv/
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+
+# Audio files
+*.wav
+
+# Data files
+data/users/*.npy
+
+# Vosk model
+vosk-model-small-en-us-0.15/
+vosk-model/
+
+# OS
+.DS_Store
