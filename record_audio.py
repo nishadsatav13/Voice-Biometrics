@@ -1,15 +1,26 @@
 import sounddevice as sd
-from scipy.io.wavfile import write
+import soundfile as sf
+import numpy as np
+import time
 
-FS = 16000        # Sampling rate (model ke hisaab se)
-DURATION = 4      # seconds
+def record_audio(filename, duration=4, fs=16000):
+    print("\n🎤 Get ready...")
+    time.sleep(2)
 
-def record_audio(filename="live.wav"):
-    print("🎤 Speak now...")
-    audio = sd.rec(int(DURATION * FS), samplerate=FS, channels=1)
+    print("🔴 Recording NOW — speak!")
+    
+    # Reset audio device properly
+    sd.stop()
+    sd.default.samplerate = fs
+    sd.default.channels = 1
+
+    audio = sd.rec(int(duration * fs), dtype='float32')
     sd.wait()
-    write(filename, FS, audio)
-    print(f"✅ Audio saved as {filename}")
 
-if __name__ == "__main__":
-    record_audio()
+    # Ensure audio is not empty
+    if np.max(np.abs(audio)) < 1e-4:
+        print("⚠️ Warning: very low audio detected")
+
+    sf.write(filename, audio, fs)
+
+    print(f"✅ Saved: {filename}\n")

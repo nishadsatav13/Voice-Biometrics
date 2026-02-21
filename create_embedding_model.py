@@ -1,16 +1,19 @@
 from tensorflow.keras.models import load_model, Model
 
-# 1. Load the trained model
+# Load trained classifier
 model = load_model("best_model.h5", compile=False)
 
-# 2. Build embedding-only model directly from layers
-embedding_layer = model.get_layer("embedding_layer")
+# Show layers (important for debugging)
+model.summary()
+
+# Extract from last LSTM layer
+embedding_layer = model.layers[3]   # usually last BiLSTM
 
 embedding_model = Model(
-    inputs=model.inputs,          # <-- use model.inputs (not model.input)
+    inputs=model.inputs,
     outputs=embedding_layer.output
 )
 
-# 3. Save embedding model
 embedding_model.save("embedding_model.h5")
-print("✅ embedding_model.h5 created successfully!")
+
+print("✅ New embedding_model.h5 created from LSTM layer!")
