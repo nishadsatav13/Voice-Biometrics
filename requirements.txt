@@ -3,3 +3,5 @@ resemblyzer
 faster-whisper
 numpy
 scipy
+webrtcvad-wheels
+setuptools
