@@ -1,40 +1,15 @@
-# 🔐 Voice-Based Authentication System
+# Voice Biometric Authentication System
 
-A final-year engineering project that implements a **secure voice biometric authentication system** using deep learning.  
-The system verifies users based on their **unique voiceprint** instead of passwords and uses a **challenge–response mechanism** to prevent replay attacks.
+🔗 **Live Demo:** https://voice-biometrics-nsxbb8paq7lmingaewqenp.streamlit.app/
 
----
+## About
+A passwordless voice biometric authentication system using:
+- Resemblyzer — 256-dim speaker embeddings via metric learning
+- Faster-Whisper — challenge-response speech verification
+- Cosine similarity — voice matching (threshold: 0.82)
+- Streamlit — deployed frontend
 
-## 🚀 Key Features
-- MFCC-based audio processing  
-- Bidirectional LSTM model  
-- 128-D **voice embedding** for biometric verification  
-- Similarity-based authentication  
-- Replay-attack protection using challenge phrases  
-
----
-
-## ⚙️ Tech Stack
-- Python  
-- TensorFlow / Keras  
-- NumPy, Librosa  
-- Scikit-learn  
-
----
-
-## 📂 Important Files
-- `train_model.py` – model training  
-- `create_embedding_model.py` – embedding model creation  
-- `embedding_model.h5` – 🔥 voice biometric engine  
-
----
-
-## 📌 Status
-- ✅ Model trained (~99.7% accuracy)  
-- ✅ Embedding model created  
-- 🚧 Enrollment & verification modules in progress  
-
----
-
-**Final Year Engineering Project – Voice Biometrics**
-
+## How it works
+1. **Enroll** — Record 5 voice samples to create your voice profile
+2. **Login** — Speak a random challenge phrase to authenticate
+3. Both voice identity AND phrase must match to grant access
