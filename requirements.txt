@@ -1,6 +1,5 @@
-tensorflow>=2.10
+streamlit
+resemblyzer
+faster-whisper
 numpy
-librosa
-sounddevice
 scipy
-vosk
