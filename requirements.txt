@@ -1,8 +1,7 @@
-streamlit>=1.35.0
-numpy>=1.24.0
-scipy>=1.11.0
-setuptools>=69.0.0
-resemblyzer>=0.1.4
-faster-whisper>=1.0.3
-soundfile>=0.12.1
-webrtcvad-wheels
+streamlit==1.39.0
+numpy==1.26.4
+resemblyzer==0.1.4
+webrtcvad==2.0.10
+setuptools==69.5.1
+faster-whisper==1.0.3
+av==12.3.0
