@@ -7,7 +7,6 @@ from numpy.linalg import norm
 import streamlit as st
 from resemblyzer import VoiceEncoder, preprocess_wav
 from faster_whisper import WhisperModel
-from audio_recorder_streamlit import audio_recorder
 
 # ─────────────────────────────────────────────
 # PAGE CONFIG
@@ -144,14 +143,6 @@ html, body, [class*="css"] {
     font-weight: 800;
     color: #ff3355;
     box-shadow: 0 0 30px rgba(220,0,40,0.15);
-}
-
-.record-note {
-    text-align: center;
-    font-size: 0.95rem;
-    color: rgba(255,220,210,0.85);
-    margin-bottom: 12px;
-    font-weight: 600;
 }
 
 .section-head {
@@ -322,10 +313,10 @@ with tab_enroll:
     st.markdown("""
     <div class="tips-box">
         <b>Recording Tips:</b><br>
-        • Speak clearly and naturally for 2–4 seconds<br>
-        • Stop speaking and wait 1 second<br>
-        • Record in a quiet environment<br>
-        • Use the same device for login
+        • Click record and speak clearly for 2–4 seconds<br>
+        • Use the same room/device for login<br>
+        • Keep similar mic distance each time<br>
+        • Stop speaking and wait a moment before next sample
     </div>
     """, unsafe_allow_html=True)
 
@@ -344,8 +335,14 @@ with tab_enroll:
         done = len(st.session_state.enroll_embeddings)
         total = NUM_SAMPLES
 
-        st.progress(done / total, text=f"Voice samples: {done} / {total}")
-        dots = "".join(["🟢 " if i < done else ("🔴 " if i == done else "⚪ ") for i in range(total)])
+        # FIXED 5/5 BUG
+        if done >= total:
+            st.progress(1.0, text=f"Voice samples: {total} / {total}")
+            dots = "🟢 🟢 🟢 🟢 🟢"
+        else:
+            st.progress(done / total, text=f"Voice samples: {done} / {total}")
+            dots = "".join(["🟢 " if i < done else ("🔴 " if i == done else "⚪ ") for i in range(total)])
+
         st.markdown(f'<div class="dots-row">{dots}</div>', unsafe_allow_html=True)
 
         enroll_path = os.path.join(USER_DIR, f"{username}.npy")
@@ -370,27 +367,16 @@ with tab_enroll:
                         Sample {done + 1} of {total}
                     </span><br>
                     <span style="color:rgba(255,220,210,0.7); font-size:0.9rem;">
-                        Click the mic below and speak for 2–4 seconds
+                        Click below and record your voice
                     </span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown('<div class="record-note">🎤 Tap the mic below to record</div>', unsafe_allow_html=True)
+            audio = st.audio_input(f"🎤 Record Sample {done + 1}", key=f"enroll_audio_{done}")
 
-            audio_bytes = audio_recorder(
-                text="",
-                recording_color="#e8003d",
-                neutral_color="#d4af37",
-                icon_name="microphone",
-                icon_size="2x",
-                pause_threshold=0.8,
-                sample_rate=16000,
-                key=f"enroll_audio_{done}"
-            )
-
-            if audio_bytes:
-                st.audio(audio_bytes, format="audio/wav")
+            if audio is not None:
+                audio_bytes = audio.read()
                 current_hash = hash(audio_bytes[:500])
 
                 if st.session_state.last_enroll_hash != current_hash:
@@ -400,18 +386,24 @@ with tab_enroll:
                             st.session_state.enroll_embeddings.append(emb)
                             st.session_state.last_enroll_hash = current_hash
 
-                            new_done = len(st.session_state.enroll_embeddings)
+                            current_done = len(st.session_state.enroll_embeddings)
 
-                            if new_done >= total:
+                            if current_done >= total:
                                 all_emb = np.array(st.session_state.enroll_embeddings[:total], dtype=np.float32)
                                 np.save(enroll_path, all_emb)
+
+                                # FIXED FINAL VISUAL UPDATE
+                                st.progress(1.0, text=f"Voice samples: {total} / {total}")
+                                st.markdown('<div class="dots-row">🟢 🟢 🟢 🟢 🟢</div>', unsafe_allow_html=True)
+
                                 st.balloons()
                                 st.success(f"🎉 **{username}** enrolled successfully with {total} samples!")
+
                                 st.session_state.enroll_embeddings = []
                                 st.session_state.enroll_username = ""
                                 st.session_state.last_enroll_hash = None
                             else:
-                                st.success(f"✅ Sample {new_done} saved! {total - new_done} more to go.")
+                                st.success(f"✅ Sample {current_done} saved! {total - current_done} more to go.")
                                 st.rerun()
 
                         except Exception as e:
@@ -469,39 +461,30 @@ with tab_login:
                         Verification Audio
                     </span><br>
                     <span style="color:rgba(255,220,210,0.7); font-size:0.88rem;">
-                        Click the mic and say the phrase above
+                        Click below and say the phrase above
                     </span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown('<div class="record-note">🎤 Tap the mic below to verify</div>', unsafe_allow_html=True)
+            verify_audio = st.audio_input("🎤 Record Verification", key="verify_audio_input")
 
-            verify_audio_bytes = audio_recorder(
-                text="",
-                recording_color="#e8003d",
-                neutral_color="#d4af37",
-                icon_name="microphone",
-                icon_size="2x",
-                pause_threshold=0.8,
-                sample_rate=16000,
-                key="verify_audio_input"
-            )
-
-            if verify_audio_bytes:
-                st.audio(verify_audio_bytes, format="audio/wav")
-                current_hash = hash(verify_audio_bytes[:500])
+            if verify_audio is not None:
+                audio_bytes = verify_audio.read()
+                current_hash = hash(audio_bytes[:500])
 
                 if st.session_state.last_verify_hash != current_hash:
                     with st.spinner("🔍 Analysing voice..."):
                         try:
-                            test_emb = extract_embedding(verify_audio_bytes)
+                            test_emb = extract_embedding(audio_bytes)
                             scores = [cosine_sim(e, test_emb) for e in stored]
                             best_score = max(scores)
                             avg_score = round(sum(scores) / len(scores), 3)
+
+                            # PRACTICAL DEMO LOGIC
                             voice_passed = best_score >= VOICE_THRESHOLD
 
-                            spoken_text = transcribe_audio(verify_audio_bytes)
+                            spoken_text = transcribe_audio(audio_bytes)
                             ratio = phrase_ratio(spoken_text, st.session_state.challenge_phrase)
                             phrase_passed = ratio >= PHRASE_THRESHOLD
 
@@ -529,7 +512,7 @@ with tab_login:
                                 if not voice_passed and not phrase_passed:
                                     st.warning("⚠️ Both voice and phrase failed. Speak clearly and say the exact phrase.")
                                 elif not voice_passed:
-                                    st.warning(f"⚠️ Voice score {best_score:.3f} is below threshold {VOICE_THRESHOLD}. Try in a quieter place.")
+                                    st.warning(f"⚠️ Voice score {best_score:.3f} is below threshold {VOICE_THRESHOLD}. Try again in a quieter place.")
                                 elif not phrase_passed:
                                     st.warning(f"⚠️ Only {ratio*100:.0f}% of words matched. Say the exact phrase shown.")
 
