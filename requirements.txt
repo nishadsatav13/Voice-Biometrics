@@ -4,4 +4,5 @@ resemblyzer==0.1.4
 webrtcvad==2.0.10
 setuptools==69.5.1
 faster-whisper==1.0.3
+audio-recorder-streamlit
 av==12.3.0
