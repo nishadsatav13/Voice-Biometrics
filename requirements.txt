@@ -1,10 +1,11 @@
 streamlit==1.39.0
 numpy==1.26.4
 scipy==1.11.4
-setuptools>=68.0.0
-wheel>=0.41.0
+setuptools==69.5.1
+wheel==0.43.0
+pip==24.0
 resemblyzer==0.1.4
-webrtcvad-wheels==2.0.14
+webrtcvad==2.0.10
 faster-whisper==1.0.3
 librosa==0.10.2.post1
 soundfile==0.12.1
