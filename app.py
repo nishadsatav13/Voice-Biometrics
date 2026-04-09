@@ -9,7 +9,7 @@ from resemblyzer import VoiceEncoder, preprocess_wav
 from faster_whisper import WhisperModel
 
 # ─────────────────────────────────────────────
-#  PAGE CONFIG
+# PAGE CONFIG
 # ─────────────────────────────────────────────
 st.set_page_config(
     page_title="VoiceAuth — Biometric Authentication",
@@ -18,7 +18,7 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────
-#  CSS — Red / Black / Gold theme
+# CSS — Red / Black / Gold theme
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -26,12 +26,10 @@ st.markdown("""
 
 html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 
-/* ── Background ── */
 .stApp {
     background: radial-gradient(ellipse at top, #1a0000 0%, #0a0a0a 60%, #0d0000 100%) !important;
 }
 
-/* ── Title ── */
 .title-wrap { text-align: center; margin-bottom: 4px; }
 .title-text {
     font-family: 'Syne', sans-serif;
@@ -47,7 +45,6 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     margin-bottom: 1.6rem;
 }
 
-/* ── Tabs ── */
 .stTabs [data-baseweb="tab-list"] {
     gap: 6px;
     background: rgba(255,255,255,0.04);
@@ -65,7 +62,6 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     box-shadow: 0 4px 16px rgba(192,0,31,0.4);
 }
 
-/* ── Cards ── */
 .glass-card {
     background: rgba(255,255,255,0.03);
     border: 1px solid rgba(212,175,55,0.18);
@@ -74,7 +70,6 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     margin-bottom: 16px;
 }
 
-/* ── Tips box ── */
 .tips-box {
     background: rgba(192,0,31,0.1);
     border-left: 4px solid #e8003d;
@@ -84,10 +79,8 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     line-height: 1.7;
 }
 
-/* ── Progress dots ── */
 .dots-row { text-align: center; font-size: 1.1rem; margin: 8px 0; }
 
-/* ── Challenge box ── */
 .challenge-box {
     background: rgba(192,0,31,0.09);
     border: 1px solid rgba(212,175,55,0.3);
@@ -104,7 +97,6 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     font-size: 1.4rem; font-weight: 700; color: #ffffff;
 }
 
-/* ── Results ── */
 .result-granted {
     background: rgba(0,200,130,0.09);
     border: 2px solid rgba(0,200,130,0.4);
@@ -124,7 +116,6 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     box-shadow: 0 0 30px rgba(220,0,40,0.15);
 }
 
-/* ── Inputs ── */
 .stTextInput > div > div > input {
     background: rgba(255,255,255,0.05) !important;
     border: 1px solid rgba(212,175,55,0.25) !important;
@@ -135,20 +126,13 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     box-shadow: 0 0 0 3px rgba(232,0,61,0.2) !important;
 }
 
-/* ── Buttons ── */
 .stButton > button {
     background: linear-gradient(135deg, #c0001f, #8b0000) !important;
     color: white !important; border: none !important;
     border-radius: 12px !important; font-weight: 700 !important;
     box-shadow: 0 4px 16px rgba(192,0,31,0.3) !important;
-    transition: all 0.3s ease !important;
-}
-.stButton > button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 8px 24px rgba(192,0,31,0.45) !important;
 }
 
-/* ── Section headers ── */
 .section-head {
     font-family: 'Syne', sans-serif;
     font-size: 1.1rem; font-weight: 700;
@@ -156,49 +140,38 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     letter-spacing: 0.04em;
 }
 
-/* ── Metric labels ── */
 [data-testid="stMetricLabel"] { color: rgba(255,220,210,0.7) !important; font-size: 0.8rem !important; }
 [data-testid="stMetricValue"] { color: white !important; font-family: 'Syne', sans-serif !important; }
 
-/* ── Divider ── */
 hr { border-color: rgba(212,175,55,0.15) !important; }
-
-/* ── Caption ── */
 .stCaption { color: rgba(255,220,210,0.55) !important; }
-
-/* ── Spinner ── */
-.stSpinner > div { border-top-color: #e8003d !important; }
-
-/* ── Audio widget ── */
 audio { border-radius: 10px; width: 100%; }
 </style>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-#  CONFIG  ← KEY FIX: single threshold, lower value
+# CONFIG
 # ─────────────────────────────────────────────
-BASE_DIR         = os.path.dirname(os.path.abspath(__file__))
-USER_DIR         = os.path.join(BASE_DIR, "dataa", "usera")   # your folder
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+USER_DIR = os.path.join(BASE_DIR, "data", "users")
 
-VOICE_THRESHOLD  = 0.72   # single threshold — more accepting
-PHRASE_THRESHOLD = 0.55   # relaxed phrase match
-NUM_SAMPLES      = 5
+VOICE_THRESHOLD = 0.72
+PHRASE_THRESHOLD = 0.55
+NUM_SAMPLES = 5
 
 CHALLENGE_PHRASES = [
-    "my voice is my password",
-    "unlock the system now",
-    "voice authentication enabled",
-    "identity verified successfully",
-    "this is my voice key",
-    "secure access granted",
-    "grant me access today",
     "open the voice lock",
+    "grant access now",
+    "verify my identity",
+    "let me log in",
+    "my voice is unique",
+    "this is my access key",
 ]
 
 os.makedirs(USER_DIR, exist_ok=True)
 
 # ─────────────────────────────────────────────
-#  MODELS
+# MODELS
 # ─────────────────────────────────────────────
 @st.cache_resource(show_spinner="Loading voice encoder...")
 def load_encoder():
@@ -206,13 +179,13 @@ def load_encoder():
 
 @st.cache_resource(show_spinner="Loading speech model...")
 def load_whisper():
-    return WhisperModel("base", device="cpu", compute_type="int8")
+    return WhisperModel("tiny", device="cpu", compute_type="int8")
 
 encoder = load_encoder()
 whisper = load_whisper()
 
 # ─────────────────────────────────────────────
-#  HELPERS
+# HELPERS
 # ─────────────────────────────────────────────
 def sanitize(name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_\-]", "", name.strip().lower())
@@ -224,7 +197,7 @@ def extract_embedding(audio_bytes: bytes) -> np.ndarray:
     try:
         wav = preprocess_wav(tmp)
         emb = encoder.embed_utterance(wav)
-        n   = norm(emb)
+        n = norm(emb)
         return emb / n if n != 0 else emb
     finally:
         if os.path.exists(tmp):
@@ -248,9 +221,11 @@ def transcribe_audio(audio_bytes: bytes) -> str:
         tmp = f.name
     try:
         segments, _ = whisper.transcribe(
-            tmp, language="en", beam_size=5,
+            tmp,
+            language="en",
+            beam_size=1,
             vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=300)
+            vad_parameters=dict(min_silence_duration_ms=200)
         )
         text = " ".join(s.text for s in segments).strip().lower()
         text = re.sub(r"[^a-z0-9\s]", "", text)
@@ -268,32 +243,32 @@ def list_users():
     return sorted([f.replace(".npy","") for f in os.listdir(USER_DIR) if f.endswith(".npy")])
 
 # ─────────────────────────────────────────────
-#  SESSION STATE
+# SESSION STATE
 # ─────────────────────────────────────────────
 for key, val in {
     "enroll_embeddings": [],
-    "enroll_username":   "",
-    "challenge_phrase":  None,
-    "last_enroll_hash":  None,
-    "last_verify_hash":  None,
+    "enroll_username": "",
+    "challenge_phrase": None,
+    "last_enroll_hash": None,
+    "last_verify_hash": None,
 }.items():
     if key not in st.session_state:
         st.session_state[key] = val
 
 # ─────────────────────────────────────────────
-#  HEADER
+# HEADER
 # ─────────────────────────────────────────────
 st.markdown('<div class="title-wrap"><span class="title-text">🎙 VoiceAuth</span></div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle-text">BIOMETRIC VOICE AUTHENTICATION SYSTEM</div>', unsafe_allow_html=True)
 st.divider()
 
 # ─────────────────────────────────────────────
-#  TABS
+# TABS
 # ─────────────────────────────────────────────
-tab_enroll, tab_login = st.tabs(["🧬  Enroll", "🔐  Login"])
+tab_enroll, tab_login = st.tabs(["🧬 Enroll", "🔐 Login"])
 
 # ═══════════════════════════════════════════
-#  ENROLL TAB
+# ENROLL TAB
 # ═══════════════════════════════════════════
 with tab_enroll:
     st.markdown('<div class="section-head">Create Voice Profile</div>', unsafe_allow_html=True)
@@ -301,37 +276,33 @@ with tab_enroll:
 
     st.markdown("""
     <div class="tips-box">
-        <b>🎯 Recording Tips:</b><br>
-        • Speak clearly and naturally for 3–4 seconds<br>
+        <b>Recording Tips:</b><br>
+        • Speak clearly and naturally for 2–4 seconds<br>
         • Record in a quiet environment<br>
-        • Use the same device you'll use for login<br>
-        • Keep a consistent distance from the mic
+        • Use the same device for login<br>
+        • Keep similar mic distance
     </div>
     """, unsafe_allow_html=True)
 
     username_raw = st.text_input("Username", placeholder="e.g. nishad", key="enroll_user_input")
-    username     = sanitize(username_raw)
+    username = sanitize(username_raw)
 
     if username_raw and not username:
         st.warning("⚠️ Username can only contain letters, numbers, _ and -")
 
     if username:
-        # Reset if username changed
         if st.session_state.enroll_username != username:
             st.session_state.enroll_embeddings = []
-            st.session_state.enroll_username   = username
-            st.session_state.last_enroll_hash  = None
+            st.session_state.enroll_username = username
+            st.session_state.last_enroll_hash = None
 
-        done  = len(st.session_state.enroll_embeddings)
+        done = len(st.session_state.enroll_embeddings)
         total = NUM_SAMPLES
 
-        # Progress
-        prog = done / total
-        st.progress(prog, text=f"Voice samples: {done} / {total}")
+        st.progress(done / total, text=f"Voice samples: {done} / {total}")
         dots = "".join(["🟢 " if i < done else ("🔴 " if i == done else "⚪ ") for i in range(total)])
         st.markdown(f'<div class="dots-row">{dots}</div>', unsafe_allow_html=True)
 
-        # Check if already enrolled
         enroll_path = os.path.join(USER_DIR, f"{username}.npy")
         already_done = os.path.exists(enroll_path) and done == 0
 
@@ -343,8 +314,9 @@ with tab_enroll:
                 except:
                     pass
                 st.session_state.enroll_embeddings = []
-                st.session_state.last_enroll_hash  = None
+                st.session_state.last_enroll_hash = None
                 st.rerun()
+
         elif done < total:
             st.markdown(f"""
             <div class="glass-card">
@@ -353,21 +325,17 @@ with tab_enroll:
                         Sample {done + 1} of {total}
                     </span><br>
                     <span style="color:rgba(255,220,210,0.7); font-size:0.9rem;">
-                        Click the mic → speak for 3–4 seconds → stop
+                        Click record and speak for 2–4 seconds
                     </span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-            # Use native Streamlit audio input
-            audio = st.audio_input(
-                f"🎤 Record Sample {done + 1}",
-                key=f"enroll_audio_{done}"
-            )
+            audio = st.audio_input(f"🎤 Record Sample {done + 1}", key=f"enroll_audio_{done}")
 
             if audio is not None:
                 audio_bytes = audio.read()
-                current_hash = hash(audio_bytes[:500])  # fast hash
+                current_hash = hash(audio_bytes[:500])
 
                 if st.session_state.last_enroll_hash != current_hash:
                     with st.spinner(f"Processing sample {done + 1}..."):
@@ -383,34 +351,29 @@ with tab_enroll:
                                 np.save(enroll_path, all_emb)
                                 st.balloons()
                                 st.success(f"🎉 **{username}** enrolled successfully with {total} samples!")
-                                # Reset for next user
                                 st.session_state.enroll_embeddings = []
-                                st.session_state.enroll_username   = ""
-                                st.session_state.last_enroll_hash  = None
+                                st.session_state.enroll_username = ""
+                                st.session_state.last_enroll_hash = None
                             else:
                                 st.success(f"✅ Sample {new_done} saved! {total - new_done} more to go.")
                                 st.rerun()
 
                         except Exception as e:
                             st.error(f"Error: {e}")
-                else:
-                    st.info("Sample already processed. Record a new one for the next sample.")
 
-    # Show enrolled users at bottom
     users = list_users()
     if users:
         st.divider()
         st.caption(f"**Enrolled users ({len(users)}):** {', '.join(u.capitalize() for u in users)}")
 
-
 # ═══════════════════════════════════════════
-#  LOGIN TAB
+# LOGIN TAB
 # ═══════════════════════════════════════════
 with tab_login:
     st.markdown('<div class="section-head">Voice Verification</div>', unsafe_allow_html=True)
     st.caption("Speak the challenge phrase to authenticate your identity.")
 
-    login_raw  = st.text_input("Username", placeholder="Enter your username", key="login_user_input")
+    login_raw = st.text_input("Username", placeholder="Enter your username", key="login_user_input")
     login_user = sanitize(login_raw)
 
     if login_raw and not login_user:
@@ -424,7 +387,6 @@ with tab_login:
         else:
             st.success(f"✅ User found — {stored.shape[0]} voice samples loaded.")
 
-            # Challenge phrase
             if st.session_state.challenge_phrase is None:
                 st.session_state.challenge_phrase = random.choice(CHALLENGE_PHRASES)
 
@@ -432,7 +394,7 @@ with tab_login:
             with col1:
                 st.markdown(f"""
                 <div class="challenge-box">
-                    <div class="challenge-label">🔐 Speak This Phrase Clearly</div>
+                    <div class="challenge-label">Speak This Phrase Clearly</div>
                     <div class="challenge-phrase">"{st.session_state.challenge_phrase}"</div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -451,7 +413,7 @@ with tab_login:
                         Verification Audio
                     </span><br>
                     <span style="color:rgba(255,220,210,0.7); font-size:0.88rem;">
-                        Click the mic → speak the phrase above → stop
+                        Click record and say the phrase above
                     </span>
                 </div>
             </div>
@@ -460,49 +422,42 @@ with tab_login:
             verify_audio = st.audio_input("🎤 Record Verification", key="verify_audio_input")
 
             if verify_audio is not None:
-                audio_bytes  = verify_audio.read()
+                audio_bytes = verify_audio.read()
                 current_hash = hash(audio_bytes[:500])
 
                 if st.session_state.last_verify_hash != current_hash:
                     with st.spinner("🔍 Analysing voice..."):
                         try:
-                            # ── Voice verification ──────────────────────
-                            test_emb     = extract_embedding(audio_bytes)
-                            scores       = [cosine_sim(e, test_emb) for e in stored]
-                            best_score   = max(scores)
-                            avg_score    = round(sum(scores) / len(scores), 3)
+                            test_emb = extract_embedding(audio_bytes)
+                            scores = [cosine_sim(e, test_emb) for e in stored]
+                            best_score = max(scores)
+                            avg_score = round(sum(scores) / len(scores), 3)
                             voice_passed = best_score >= VOICE_THRESHOLD
 
-                            # ── Phrase verification ──────────────────────
-                            spoken_text   = transcribe_audio(audio_bytes)
-                            ratio         = phrase_ratio(spoken_text, st.session_state.challenge_phrase)
+                            spoken_text = transcribe_audio(audio_bytes)
+                            ratio = phrase_ratio(spoken_text, st.session_state.challenge_phrase)
                             phrase_passed = ratio >= PHRASE_THRESHOLD
 
                             access_granted = voice_passed and phrase_passed
                             st.session_state.last_verify_hash = current_hash
 
-                            # ── Result display ───────────────────────────
                             st.divider()
 
                             if access_granted:
-                                st.markdown('<div class="result-granted">✅ &nbsp; ACCESS GRANTED</div>', unsafe_allow_html=True)
+                                st.markdown('<div class="result-granted">✅ ACCESS GRANTED</div>', unsafe_allow_html=True)
                             else:
-                                st.markdown('<div class="result-denied">❌ &nbsp; ACCESS DENIED</div>', unsafe_allow_html=True)
-
-                            st.write("")
+                                st.markdown('<div class="result-denied">❌ ACCESS DENIED</div>', unsafe_allow_html=True)
 
                             c1, c2, c3, c4 = st.columns(4)
-                            c1.metric("Best Score",    f"{best_score:.3f}",      f"threshold {VOICE_THRESHOLD}")
-                            c2.metric("Avg Score",     f"{avg_score:.3f}")
-                            c3.metric("Voice Match",   "✅ PASS" if voice_passed  else "❌ FAIL")
-                            c4.metric("Phrase Match",  "✅ PASS" if phrase_passed else "❌ FAIL")
+                            c1.metric("Best Score", f"{best_score:.3f}", f"threshold {VOICE_THRESHOLD}")
+                            c2.metric("Avg Score", f"{avg_score:.3f}")
+                            c3.metric("Voice Match", "✅ PASS" if voice_passed else "❌ FAIL")
+                            c4.metric("Phrase Match", "✅ PASS" if phrase_passed else "❌ FAIL")
 
-                            st.write("")
                             st.caption(f'**You said:** *"{spoken_text if spoken_text else "nothing detected"}"*')
                             st.caption(f'**Expected:** *"{st.session_state.challenge_phrase}"*')
                             st.caption(f'**Word overlap:** {ratio*100:.0f}%')
 
-                            # Helpful failure hints
                             if not access_granted:
                                 if not voice_passed and not phrase_passed:
                                     st.warning("⚠️ Both voice and phrase failed. Speak clearly and say the exact phrase.")
@@ -511,10 +466,7 @@ with tab_login:
                                 elif not phrase_passed:
                                     st.warning(f"⚠️ Only {ratio*100:.0f}% of words matched. Say the exact phrase shown.")
 
-                            # Auto-refresh phrase for next attempt
                             st.session_state.challenge_phrase = random.choice(CHALLENGE_PHRASES)
 
                         except Exception as e:
                             st.error(f"Verification error: {e}")
-                else:
-                    st.info("Same recording detected. Record again for a new attempt.")
