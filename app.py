@@ -7,6 +7,7 @@ from numpy.linalg import norm
 import streamlit as st
 from resemblyzer import VoiceEncoder, preprocess_wav
 from faster_whisper import WhisperModel
+from audio_recorder_streamlit import audio_recorder
 
 # ─────────────────────────────────────────────
 # PAGE CONFIG
@@ -115,7 +116,7 @@ CHALLENGE_PHRASES = [
 os.makedirs(USER_DIR, exist_ok=True)
 
 # ─────────────────────────────────────────────
-# LOAD MODELS (cached)
+# LOAD MODELS
 # ─────────────────────────────────────────────
 @st.cache_resource
 def load_encoder():
@@ -198,7 +199,7 @@ def list_users():
     ])
 
 # ─────────────────────────────────────────────
-# SESSION STATE INIT
+# SESSION STATE
 # ─────────────────────────────────────────────
 if "enroll_embeddings" not in st.session_state:
     st.session_state.enroll_embeddings = []
@@ -234,19 +235,13 @@ with tab_enroll:
     st.subheader("Create Voice Profile")
     st.caption("Record 5 voice samples to register your biometric identity.")
 
-    username_input = st.text_input(
-        "Username",
-        placeholder="Enter your username",
-        key="enroll_user"
-    )
-
+    username_input = st.text_input("Username", placeholder="Enter your username", key="enroll_user")
     username = sanitize_username(username_input)
 
     if username_input and not username:
         st.warning("⚠️ Username can only contain letters, numbers, underscores, and hyphens.")
 
     if username:
-        # reset only when user changes
         if st.session_state.enroll_username != username:
             st.session_state.enroll_embeddings = []
             st.session_state.enroll_username = username
@@ -285,15 +280,16 @@ with tab_enroll:
             if done < total:
                 st.info(f"🎤 Record sample **{done + 1} of {total}** — speak naturally for 3–4 seconds")
 
-                audio = st.audio_input(
-                    f"Record Sample {done + 1}",
+                audio_bytes = audio_recorder(
+                    text="Click to record",
+                    recording_color="#ff4b4b",
+                    neutral_color="#6c63ff",
+                    icon_name="microphone",
+                    icon_size="2x",
                     key=f"enroll_audio_{done}"
                 )
 
-                if audio is not None:
-                    audio_bytes = audio.read()
-
-                    # Prevent duplicate processing on rerun
+                if audio_bytes:
                     current_audio_id = hash(audio_bytes)
 
                     if st.session_state.last_enroll_audio_id != current_audio_id:
@@ -313,7 +309,6 @@ with tab_enroll:
                                     st.balloons()
                                     st.success(f"🎉 **{username}** enrolled successfully with {total} voice samples!")
 
-                                    # reset state cleanly
                                     st.session_state.enroll_embeddings = []
                                     st.session_state.enroll_username = ""
                                     st.session_state.last_enroll_audio_id = None
@@ -322,8 +317,6 @@ with tab_enroll:
 
                             except Exception as e:
                                 st.error(f"Error processing audio: {e}")
-            else:
-                st.success(f"🎉 Enrollment complete for **{username}**")
 
     users = list_users()
     if users:
@@ -337,12 +330,7 @@ with tab_login:
     st.subheader("Voice Verification")
     st.caption("Speak the challenge phrase to authenticate your identity.")
 
-    login_input = st.text_input(
-        "Username",
-        placeholder="Enter your username",
-        key="login_user"
-    )
-
+    login_input = st.text_input("Username", placeholder="Enter your username", key="login_user")
     login_user = sanitize_username(login_input)
 
     if login_input and not login_user:
@@ -362,12 +350,12 @@ with tab_login:
             col1, col2 = st.columns([3, 1])
 
             with col1:
-                st.markdown(f"""
+                st.markdown(f'''
                 <div class="challenge-box">
                     <div class="challenge-label">🔐 Speak this phrase</div>
                     <div class="challenge-phrase">"{st.session_state.challenge_phrase}"</div>
                 </div>
-                """, unsafe_allow_html=True)
+                ''', unsafe_allow_html=True)
 
             with col2:
                 st.write("")
@@ -379,25 +367,28 @@ with tab_login:
 
             st.info("🎤 Record your voice speaking the phrase above")
 
-            verify_audio = st.audio_input("Speak now", key="verify_audio")
+            verify_audio_bytes = audio_recorder(
+                text="Click to record verification",
+                recording_color="#ff4b4b",
+                neutral_color="#00d4aa",
+                icon_name="microphone",
+                icon_size="2x",
+                key="verify_audio"
+            )
 
-            if verify_audio is not None:
-                audio_bytes = verify_audio.read()
-                current_verify_audio_id = hash(audio_bytes)
+            if verify_audio_bytes:
+                current_verify_audio_id = hash(verify_audio_bytes)
 
-                # Prevent duplicate processing on rerun
                 if st.session_state.last_verify_audio_id != current_verify_audio_id:
                     with st.spinner("🔍 Verifying identity..."):
                         try:
-                            # Voice check
-                            test_emb = extract_embedding(audio_bytes)
+                            test_emb = extract_embedding(verify_audio_bytes)
                             scores = [cosine_similarity(e, test_emb) for e in stored]
                             best_score = max(scores)
                             avg_score = round(sum(scores) / len(scores), 3)
                             voice_passed = best_score >= VOICE_THRESHOLD
 
-                            # Phrase check
-                            spoken_text = transcribe(audio_bytes)
+                            spoken_text = transcribe(verify_audio_bytes)
                             ratio = phrase_match_ratio(spoken_text, st.session_state.challenge_phrase)
                             phrase_passed = ratio >= PHRASE_THRESHOLD
 
@@ -411,19 +402,16 @@ with tab_login:
                             else:
                                 st.markdown('<div class="result-denied">❌ ACCESS DENIED</div>', unsafe_allow_html=True)
 
-                            st.write("")
-
                             c1, c2, c3, c4 = st.columns(4)
                             c1.metric("Voice Score", f"{best_score:.3f}", f"threshold {VOICE_THRESHOLD}")
                             c2.metric("Voice Match", "✅ PASS" if voice_passed else "❌ FAIL")
                             c3.metric("Phrase Match", "✅ PASS" if phrase_passed else "❌ FAIL")
                             c4.metric("Word Overlap", f"{ratio*100:.0f}%")
 
-                            st.caption(f"**You said:** *\"{spoken_text if spoken_text else 'nothing detected'}\"*")
-                            st.caption(f"**Expected:** *\"{st.session_state.challenge_phrase}\"*")
+                            st.caption(f'**You said:** *"{spoken_text if spoken_text else "nothing detected"}"*')
+                            st.caption(f'**Expected:** *"{st.session_state.challenge_phrase}"*')
                             st.caption(f"**Average similarity across stored samples:** {avg_score}")
 
-                            # Generate next phrase after one attempt
                             st.session_state.challenge_phrase = random.choice(CHALLENGE_PHRASES)
 
                         except Exception as e:
