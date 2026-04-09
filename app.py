@@ -191,8 +191,8 @@ html, body, [class*="css"] {
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 USER_DIR = os.path.join(BASE_DIR, "data", "users")
 
-VOICE_THRESHOLD = 0.72
-PHRASE_THRESHOLD = 0.55
+VOICE_THRESHOLD = 0.69
+PHRASE_THRESHOLD = 0.50
 NUM_SAMPLES = 5
 
 CHALLENGE_PHRASES = [
@@ -221,10 +221,22 @@ encoder = load_encoder()
 whisper = load_whisper()
 
 # ─────────────────────────────────────────────
+# COMPATIBLE AUDIO INPUT (IMPORTANT FIX)
+# ─────────────────────────────────────────────
+def get_audio_input(label, key):
+    if hasattr(st, "audio_input"):
+        return st.audio_input(label, key=key)
+    elif hasattr(st, "experimental_audio_input"):
+        return st.experimental_audio_input(label, key=key)
+    else:
+        st.error("This Streamlit version does not support microphone recording.")
+        return None
+
+# ─────────────────────────────────────────────
 # HELPERS
 # ─────────────────────────────────────────────
 def sanitize(name: str) -> str:
-    return re.sub(r"[^a-zA-Z0-9_\-]", "", name.strip().lower())
+    return re.sub(r"[^a-zA-Z0-9_\\-]", "", name.strip().lower())
 
 def extract_embedding(audio_bytes: bytes) -> np.ndarray:
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
@@ -264,15 +276,15 @@ def transcribe_audio(audio_bytes: bytes) -> str:
             vad_parameters=dict(min_silence_duration_ms=200)
         )
         text = " ".join(s.text for s in segments).strip().lower()
-        text = re.sub(r"[^a-z0-9\s]", "", text)
-        return re.sub(r"\s+", " ", text).strip()
+        text = re.sub(r"[^a-z0-9\\s]", "", text)
+        return re.sub(r"\\s+", " ", text).strip()
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)
 
 def phrase_ratio(spoken: str, expected: str) -> float:
     sw = set(spoken.split())
-    ew = set(re.sub(r"[^a-z0-9\s]", "", expected.lower()).split())
+    ew = set(re.sub(r"[^a-z0-9\\s]", "", expected.lower()).split())
     return len(sw & ew) / len(ew) if ew else 0.0
 
 def list_users():
@@ -298,9 +310,6 @@ st.markdown('<div class="title-wrap"><span class="title-text">🎙 VoiceAuth</sp
 st.markdown('<div class="subtitle-text">BIOMETRIC VOICE AUTHENTICATION SYSTEM</div>', unsafe_allow_html=True)
 st.divider()
 
-# ─────────────────────────────────────────────
-# TABS
-# ─────────────────────────────────────────────
 tab_enroll, tab_login = st.tabs(["🧬 Enroll", "🔐 Login"])
 
 # ═══════════════════════════════════════════
@@ -313,10 +322,10 @@ with tab_enroll:
     st.markdown("""
     <div class="tips-box">
         <b>Recording Tips:</b><br>
-        • Click record and speak clearly for 2–4 seconds<br>
-        • Use the same room/device for login<br>
-        • Keep similar mic distance each time<br>
-        • Stop speaking and wait a moment before next sample
+        • Speak clearly for 2–4 seconds<br>
+        • Keep same mic distance<br>
+        • Use a quiet room<br>
+        • Pause a second after speaking
     </div>
     """, unsafe_allow_html=True)
 
@@ -335,7 +344,6 @@ with tab_enroll:
         done = len(st.session_state.enroll_embeddings)
         total = NUM_SAMPLES
 
-        # FIXED 5/5 BUG
         if done >= total:
             st.progress(1.0, text=f"Voice samples: {total} / {total}")
             dots = "🟢 🟢 🟢 🟢 🟢"
@@ -367,13 +375,13 @@ with tab_enroll:
                         Sample {done + 1} of {total}
                     </span><br>
                     <span style="color:rgba(255,220,210,0.7); font-size:0.9rem;">
-                        Click below and record your voice
+                        Tap below and record your voice
                     </span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-            audio = st.audio_input(f"🎤 Record Sample {done + 1}", key=f"enroll_audio_{done}")
+            audio = get_audio_input(f"🎤 Record Sample {done + 1}", key=f"enroll_audio_{done}")
 
             if audio is not None:
                 audio_bytes = audio.read()
@@ -392,7 +400,6 @@ with tab_enroll:
                                 all_emb = np.array(st.session_state.enroll_embeddings[:total], dtype=np.float32)
                                 np.save(enroll_path, all_emb)
 
-                                # FIXED FINAL VISUAL UPDATE
                                 st.progress(1.0, text=f"Voice samples: {total} / {total}")
                                 st.markdown('<div class="dots-row">🟢 🟢 🟢 🟢 🟢</div>', unsafe_allow_html=True)
 
@@ -461,13 +468,13 @@ with tab_login:
                         Verification Audio
                     </span><br>
                     <span style="color:rgba(255,220,210,0.7); font-size:0.88rem;">
-                        Click below and say the phrase above
+                        Tap below and say the phrase above
                     </span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-            verify_audio = st.audio_input("🎤 Record Verification", key="verify_audio_input")
+            verify_audio = get_audio_input("🎤 Record Verification", key="verify_audio_input")
 
             if verify_audio is not None:
                 audio_bytes = verify_audio.read()
@@ -481,7 +488,6 @@ with tab_login:
                             best_score = max(scores)
                             avg_score = round(sum(scores) / len(scores), 3)
 
-                            # PRACTICAL DEMO LOGIC
                             voice_passed = best_score >= VOICE_THRESHOLD
 
                             spoken_text = transcribe_audio(audio_bytes)
