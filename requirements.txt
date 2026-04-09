@@ -1,7 +1,7 @@
 streamlit
-resemblyzer
-faster-whisper
 numpy
 scipy
-webrtcvad-wheels
 setuptools
+webrtcvad-wheels
+faster-whisper
+resemblyzer
