@@ -89,13 +89,6 @@ st.markdown("""
         font-weight: 700;
         color: white;
     }
-    .upload-box {
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 14px;
-        padding: 12px 16px;
-        margin: 10px 0;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -205,13 +198,6 @@ def list_users():
     ])
 
 # ─────────────────────────────────────────────
-# HEADER
-# ─────────────────────────────────────────────
-st.markdown('<div class="title-text">🎙 VoiceAuth</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle-text">Biometric Voice Authentication System</div>', unsafe_allow_html=True)
-st.divider()
-
-# ─────────────────────────────────────────────
 # SESSION STATE INIT
 # ─────────────────────────────────────────────
 if "enroll_embeddings" not in st.session_state:
@@ -223,6 +209,19 @@ if "enroll_username" not in st.session_state:
 if "challenge_phrase" not in st.session_state:
     st.session_state.challenge_phrase = None
 
+if "last_enroll_audio_id" not in st.session_state:
+    st.session_state.last_enroll_audio_id = None
+
+if "last_verify_audio_id" not in st.session_state:
+    st.session_state.last_verify_audio_id = None
+
+# ─────────────────────────────────────────────
+# HEADER
+# ─────────────────────────────────────────────
+st.markdown('<div class="title-text">🎙 VoiceAuth</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle-text">Biometric Voice Authentication System</div>', unsafe_allow_html=True)
+st.divider()
+
 # ─────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────
@@ -233,7 +232,7 @@ tab_enroll, tab_login = st.tabs(["🧬 Enroll", "🔐 Login"])
 # ═══════════════════════════════════════════════
 with tab_enroll:
     st.subheader("Create Voice Profile")
-    st.caption("Upload 5 voice samples (.wav) to register your biometric identity.")
+    st.caption("Record 5 voice samples to register your biometric identity.")
 
     username_input = st.text_input(
         "Username",
@@ -247,14 +246,16 @@ with tab_enroll:
         st.warning("⚠️ Username can only contain letters, numbers, underscores, and hyphens.")
 
     if username:
+        # reset only when user changes
         if st.session_state.enroll_username != username:
             st.session_state.enroll_embeddings = []
             st.session_state.enroll_username = username
+            st.session_state.last_enroll_audio_id = None
 
         done = len(st.session_state.enroll_embeddings)
         total = NUM_SAMPLES
 
-        st.progress(done / total, text=f"Samples uploaded: {done} / {total}")
+        st.progress(done / total, text=f"Samples recorded: {done} / {total}")
 
         dots = ""
         for i in range(total):
@@ -271,46 +272,56 @@ with tab_enroll:
 
         if already_enrolled and done == 0:
             st.success(f"✅ **{username}** is already enrolled.")
-            if st.button("🔄 Re-enroll (overwrite)"):
+            if st.button("🔄 Re-enroll (overwrite)", key="reenroll_btn"):
                 try:
                     os.remove(existing_user_path)
                 except:
                     pass
                 st.session_state.enroll_embeddings = []
+                st.session_state.last_enroll_audio_id = None
                 st.rerun()
 
         else:
             if done < total:
-                st.info(f"📁 Upload sample **{done + 1} of {total}** (WAV format preferred, 3–4 sec speech)")
-                audio_file = st.file_uploader(
-                    f"Upload Sample {done + 1}",
-                    type=["wav", "mp3", "m4a"],
+                st.info(f"🎤 Record sample **{done + 1} of {total}** — speak naturally for 3–4 seconds")
+
+                audio = st.audio_input(
+                    f"Record Sample {done + 1}",
                     key=f"enroll_audio_{done}"
                 )
 
-                if audio_file is not None:
-                    audio_bytes = audio_file.read()
+                if audio is not None:
+                    audio_bytes = audio.read()
 
-                    with st.spinner("Processing voice sample..."):
-                        try:
-                            emb = extract_embedding(audio_bytes)
-                            st.session_state.enroll_embeddings.append(emb)
-                            st.success(f"✅ Sample {done + 1} uploaded successfully!")
+                    # Prevent duplicate processing on rerun
+                    current_audio_id = hash(audio_bytes)
 
-                            if len(st.session_state.enroll_embeddings) == total:
-                                all_emb = np.array(st.session_state.enroll_embeddings, dtype=np.float32)
-                                save_path = os.path.join(USER_DIR, f"{username}.npy")
-                                np.save(save_path, all_emb)
+                    if st.session_state.last_enroll_audio_id != current_audio_id:
+                        with st.spinner("Processing voice sample..."):
+                            try:
+                                emb = extract_embedding(audio_bytes)
+                                st.session_state.enroll_embeddings.append(emb)
+                                st.session_state.last_enroll_audio_id = current_audio_id
 
-                                st.balloons()
-                                st.success(f"🎉 **{username}** enrolled successfully with {total} voice samples!")
-                                st.session_state.enroll_embeddings = []
-                                st.session_state.enroll_username = ""
-                            else:
-                                st.rerun()
+                                st.success(f"✅ Sample {done + 1} recorded successfully!")
 
-                        except Exception as e:
-                            st.error(f"Error processing audio: {e}")
+                                if len(st.session_state.enroll_embeddings) == total:
+                                    all_emb = np.array(st.session_state.enroll_embeddings, dtype=np.float32)
+                                    save_path = os.path.join(USER_DIR, f"{username}.npy")
+                                    np.save(save_path, all_emb)
+
+                                    st.balloons()
+                                    st.success(f"🎉 **{username}** enrolled successfully with {total} voice samples!")
+
+                                    # reset state cleanly
+                                    st.session_state.enroll_embeddings = []
+                                    st.session_state.enroll_username = ""
+                                    st.session_state.last_enroll_audio_id = None
+                                else:
+                                    st.rerun()
+
+                            except Exception as e:
+                                st.error(f"Error processing audio: {e}")
             else:
                 st.success(f"🎉 Enrollment complete for **{username}**")
 
@@ -324,7 +335,7 @@ with tab_enroll:
 # ═══════════════════════════════════════════════
 with tab_login:
     st.subheader("Voice Verification")
-    st.caption("Upload a voice sample speaking the challenge phrase.")
+    st.caption("Speak the challenge phrase to authenticate your identity.")
 
     login_input = st.text_input(
         "Username",
@@ -361,57 +372,59 @@ with tab_login:
             with col2:
                 st.write("")
                 st.write("")
-                if st.button("🎲 New Phrase"):
+                if st.button("🎲 New Phrase", key="new_phrase_btn"):
                     st.session_state.challenge_phrase = random.choice(CHALLENGE_PHRASES)
+                    st.session_state.last_verify_audio_id = None
                     st.rerun()
 
-            st.info("📁 Upload your verification audio speaking the phrase above")
+            st.info("🎤 Record your voice speaking the phrase above")
 
-            verify_audio = st.file_uploader(
-                "Upload Verification Audio",
-                type=["wav", "mp3", "m4a"],
-                key="verify_audio"
-            )
+            verify_audio = st.audio_input("Speak now", key="verify_audio")
 
             if verify_audio is not None:
                 audio_bytes = verify_audio.read()
+                current_verify_audio_id = hash(audio_bytes)
 
-                with st.spinner("🔍 Verifying identity..."):
-                    try:
-                        # Voice check
-                        test_emb = extract_embedding(audio_bytes)
-                        scores = [cosine_similarity(e, test_emb) for e in stored]
-                        best_score = max(scores)
-                        avg_score = round(sum(scores) / len(scores), 3)
-                        voice_passed = best_score >= VOICE_THRESHOLD
+                # Prevent duplicate processing on rerun
+                if st.session_state.last_verify_audio_id != current_verify_audio_id:
+                    with st.spinner("🔍 Verifying identity..."):
+                        try:
+                            # Voice check
+                            test_emb = extract_embedding(audio_bytes)
+                            scores = [cosine_similarity(e, test_emb) for e in stored]
+                            best_score = max(scores)
+                            avg_score = round(sum(scores) / len(scores), 3)
+                            voice_passed = best_score >= VOICE_THRESHOLD
 
-                        # Phrase check
-                        spoken_text = transcribe(audio_bytes)
-                        ratio = phrase_match_ratio(spoken_text, st.session_state.challenge_phrase)
-                        phrase_passed = ratio >= PHRASE_THRESHOLD
+                            # Phrase check
+                            spoken_text = transcribe(audio_bytes)
+                            ratio = phrase_match_ratio(spoken_text, st.session_state.challenge_phrase)
+                            phrase_passed = ratio >= PHRASE_THRESHOLD
 
-                        access_granted = voice_passed and phrase_passed
+                            access_granted = voice_passed and phrase_passed
+                            st.session_state.last_verify_audio_id = current_verify_audio_id
 
-                        st.divider()
+                            st.divider()
 
-                        if access_granted:
-                            st.markdown('<div class="result-granted">✅ ACCESS GRANTED</div>', unsafe_allow_html=True)
-                        else:
-                            st.markdown('<div class="result-denied">❌ ACCESS DENIED</div>', unsafe_allow_html=True)
+                            if access_granted:
+                                st.markdown('<div class="result-granted">✅ ACCESS GRANTED</div>', unsafe_allow_html=True)
+                            else:
+                                st.markdown('<div class="result-denied">❌ ACCESS DENIED</div>', unsafe_allow_html=True)
 
-                        st.write("")
+                            st.write("")
 
-                        c1, c2, c3, c4 = st.columns(4)
-                        c1.metric("Voice Score", f"{best_score:.3f}", f"threshold {VOICE_THRESHOLD}")
-                        c2.metric("Voice Match", "✅ PASS" if voice_passed else "❌ FAIL")
-                        c3.metric("Phrase Match", "✅ PASS" if phrase_passed else "❌ FAIL")
-                        c4.metric("Word Overlap", f"{ratio*100:.0f}%")
+                            c1, c2, c3, c4 = st.columns(4)
+                            c1.metric("Voice Score", f"{best_score:.3f}", f"threshold {VOICE_THRESHOLD}")
+                            c2.metric("Voice Match", "✅ PASS" if voice_passed else "❌ FAIL")
+                            c3.metric("Phrase Match", "✅ PASS" if phrase_passed else "❌ FAIL")
+                            c4.metric("Word Overlap", f"{ratio*100:.0f}%")
 
-                        st.caption(f"**You said:** *\"{spoken_text if spoken_text else 'nothing detected'}\"*")
-                        st.caption(f"**Expected:** *\"{st.session_state.challenge_phrase}\"*")
-                        st.caption(f"**Average similarity across stored samples:** {avg_score}")
+                            st.caption(f"**You said:** *\"{spoken_text if spoken_text else 'nothing detected'}\"*")
+                            st.caption(f"**Expected:** *\"{st.session_state.challenge_phrase}\"*")
+                            st.caption(f"**Average similarity across stored samples:** {avg_score}")
 
-                        st.session_state.challenge_phrase = random.choice(CHALLENGE_PHRASES)
+                            # Generate next phrase after one attempt
+                            st.session_state.challenge_phrase = random.choice(CHALLENGE_PHRASES)
 
-                    except Exception as e:
-                        st.error(f"Verification error: {e}")
+                        except Exception as e:
+                            st.error(f"Verification error: {e}")
