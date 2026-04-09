@@ -19,7 +19,7 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────
-# CUSTOM CSS (red-black-gold theme)
+# CUSTOM CSS
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -161,7 +161,7 @@ st.markdown("""
         50% { transform: scaleY(1.15); opacity: 1; }
     }
 
-    .record-label {
+    .record-hint {
         display: inline-block;
         background: linear-gradient(135deg, #ff3b3b, #a30000);
         color: white;
@@ -181,9 +181,9 @@ st.markdown("""
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 USER_DIR = os.path.join(BASE_DIR, "data", "users")
 
-BEST_SCORE_THRESHOLD = 0.81
-AVG_SCORE_THRESHOLD = 0.75
-PHRASE_THRESHOLD = 0.80
+BEST_SCORE_THRESHOLD = 0.77
+AVG_SCORE_THRESHOLD = 0.70
+PHRASE_THRESHOLD = 0.60
 NUM_SAMPLES = 5
 MIN_TRANSCRIBED_WORDS = 2
 
@@ -248,6 +248,12 @@ def load_embeddings(username: str):
     emb = np.load(path, allow_pickle=False)
     return emb.reshape(1, -1) if emb.ndim == 1 else emb
 
+def normalize_text(text: str) -> str:
+    text = text.lower().strip()
+    text = re.sub(r"[^a-z0-9\s]", "", text)
+    text = re.sub(r"\s+", " ", text)
+    return text
+
 def transcribe(audio_bytes: bytes) -> str:
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
         f.write(audio_bytes)
@@ -262,16 +268,14 @@ def transcribe(audio_bytes: bytes) -> str:
             vad_parameters=dict(min_silence_duration_ms=250)
         )
         text = " ".join(s.text for s in segments).strip().lower()
-        for ch in ",.!?":
-            text = text.replace(ch, "")
-        return text
+        return normalize_text(text)
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
 def phrase_match_ratio(spoken: str, expected: str) -> float:
-    spoken_words = set(spoken.split())
-    expected_words = set(expected.split())
+    spoken_words = set(normalize_text(spoken).split())
+    expected_words = set(normalize_text(expected).split())
     if not expected_words:
         return 0.0
     return len(spoken_words & expected_words) / len(expected_words)
@@ -328,11 +332,11 @@ with tab_enroll:
 
     st.markdown("""
     <div class="tips-box">
-        <b>Best recording tips:</b><br>
+        <b>Recording tips:</b><br>
+        • Click the mic button below to start<br>
         • Speak clearly for 3–4 seconds<br>
-        • After clicking record, speak naturally and stop<br>
-        • Recording auto-finishes after short speech / silence<br>
-        • Use the same room and device for best results
+        • Stop speaking and it will auto-finish<br>
+        • Use the same room/device for best results
     </div>
     """, unsafe_allow_html=True)
 
@@ -351,17 +355,20 @@ with tab_enroll:
         done = len(st.session_state.enroll_embeddings)
         total = NUM_SAMPLES
 
-        st.progress(done / total, text=f"Samples recorded: {done} / {total}")
-
-        dots = ""
-        for i in range(total):
-            if i < done:
-                dots += "🟢 "
-            elif i == done:
-                dots += "🔴 "
-            else:
-                dots += "⚪ "
-        st.markdown(f"**{dots}**")
+        if done >= total:
+            st.progress(1.0, text=f"Samples recorded: {total} / {total}")
+            st.markdown("**🟢 🟢 🟢 🟢 🟢**")
+        else:
+            st.progress(done / total, text=f"Samples recorded: {done} / {total}")
+            dots = ""
+            for i in range(total):
+                if i < done:
+                    dots += "🟢 "
+                elif i == done:
+                    dots += "🔴 "
+                else:
+                    dots += "⚪ "
+            st.markdown(f"**{dots}**")
 
         existing_user_path = os.path.join(USER_DIR, f"{username}.npy")
         already_enrolled = os.path.exists(existing_user_path)
@@ -381,9 +388,9 @@ with tab_enroll:
             if done < total:
                 st.markdown(f"""
                 <div class="record-box">
-                    <div class="record-label">RECORD</div>
+                    <div class="record-hint">CLICK MIC BELOW</div>
                     <div class="record-title">Sample {done + 1} of {total}</div>
-                    <div class="record-sub">Tap record, speak for about 3–4 seconds, then pause.</div>
+                    <div class="record-sub">Speak naturally for about 3–4 seconds.</div>
                     <div class="wave">
                         <div class="bar"></div>
                         <div class="bar"></div>
@@ -416,13 +423,14 @@ with tab_enroll:
                                 st.session_state.enroll_embeddings.append(emb)
                                 st.session_state.last_enroll_audio_id = current_audio_id
 
-                                st.success(f"✅ Sample {done + 1} recorded successfully!")
-
-                                if len(st.session_state.enroll_embeddings) == total:
-                                    all_emb = np.array(st.session_state.enroll_embeddings, dtype=np.float32)
+                                if len(st.session_state.enroll_embeddings) >= total:
+                                    all_emb = np.array(st.session_state.enroll_embeddings[:total], dtype=np.float32)
                                     save_path = os.path.join(USER_DIR, f"{username}.npy")
                                     np.save(save_path, all_emb)
 
+                                    st.progress(1.0, text=f"Samples recorded: {total} / {total}")
+                                    st.markdown("**🟢 🟢 🟢 🟢 🟢**")
+                                    st.success(f"✅ Sample {total} recorded successfully!")
                                     st.balloons()
                                     st.success(f"🎉 **{username}** enrolled successfully with {total} voice samples!")
 
@@ -430,6 +438,7 @@ with tab_enroll:
                                     st.session_state.enroll_username = ""
                                     st.session_state.last_enroll_audio_id = None
                                 else:
+                                    st.success(f"✅ Sample {len(st.session_state.enroll_embeddings)} recorded successfully!")
                                     st.rerun()
 
                             except Exception as e:
@@ -484,9 +493,9 @@ with tab_login:
 
             st.markdown("""
             <div class="record-box">
-                <div class="record-label">RECORD</div>
+                <div class="record-hint">CLICK MIC BELOW</div>
                 <div class="record-title">Verification Audio</div>
-                <div class="record-sub">Tap record and speak the phrase clearly in one go.</div>
+                <div class="record-sub">Speak the phrase clearly in one go.</div>
                 <div class="wave">
                     <div class="bar"></div>
                     <div class="bar"></div>
