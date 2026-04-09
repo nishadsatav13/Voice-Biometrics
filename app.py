@@ -7,6 +7,7 @@ from numpy.linalg import norm
 import streamlit as st
 from resemblyzer import VoiceEncoder, preprocess_wav
 from faster_whisper import WhisperModel
+from audio_recorder_streamlit import audio_recorder
 
 # ─────────────────────────────────────────────
 # PAGE CONFIG
@@ -18,30 +19,37 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────
-# CSS — Red / Black / Gold theme
+# CUSTOM CSS
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;700&display=swap');
 
-html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
+html, body, [class*="css"] {
+    font-family: 'DM Sans', sans-serif;
+}
 
 .stApp {
     background: radial-gradient(ellipse at top, #1a0000 0%, #0a0a0a 60%, #0d0000 100%) !important;
 }
 
-.title-wrap { text-align: center; margin-bottom: 4px; }
+.title-wrap {
+    text-align: center;
+    margin-bottom: 4px;
+}
 .title-text {
     font-family: 'Syne', sans-serif;
-    font-size: 2.8rem; font-weight: 800;
+    font-size: 2.8rem;
+    font-weight: 800;
     background: linear-gradient(135deg, #ffffff 5%, #e8003d 50%, #d4af37 100%);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 .subtitle-text {
     text-align: center;
     color: rgba(255,220,210,0.65);
-    font-size: 0.9rem; letter-spacing: 0.06em;
+    font-size: 0.9rem;
+    letter-spacing: 0.06em;
     margin-bottom: 1.6rem;
 }
 
@@ -49,11 +57,13 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     gap: 6px;
     background: rgba(255,255,255,0.04);
     border: 1px solid rgba(212,175,55,0.15);
-    padding: 5px; border-radius: 14px;
+    padding: 5px;
+    border-radius: 14px;
 }
 .stTabs [data-baseweb="tab"] {
     border-radius: 10px;
-    font-family: 'Syne', sans-serif; font-weight: 700;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
     color: rgba(255,220,210,0.7) !important;
 }
 .stTabs [aria-selected="true"] {
@@ -65,7 +75,8 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 .glass-card {
     background: rgba(255,255,255,0.03);
     border: 1px solid rgba(212,175,55,0.18);
-    border-radius: 20px; padding: 24px 28px;
+    border-radius: 20px;
+    padding: 24px 28px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
     margin-bottom: 16px;
 }
@@ -74,52 +85,89 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     background: rgba(192,0,31,0.1);
     border-left: 4px solid #e8003d;
     border-radius: 0 12px 12px 0;
-    padding: 12px 16px; margin: 12px 0;
-    color: rgba(255,235,225,0.9); font-size: 0.88rem;
+    padding: 12px 16px;
+    margin: 12px 0;
+    color: rgba(255,235,225,0.9);
+    font-size: 0.88rem;
     line-height: 1.7;
 }
 
-.dots-row { text-align: center; font-size: 1.1rem; margin: 8px 0; }
+.dots-row {
+    text-align: center;
+    font-size: 1.1rem;
+    margin: 8px 0;
+}
 
 .challenge-box {
     background: rgba(192,0,31,0.09);
     border: 1px solid rgba(212,175,55,0.3);
-    border-radius: 16px; padding: 18px 24px;
-    text-align: center; margin: 12px 0;
+    border-radius: 16px;
+    padding: 18px 24px;
+    text-align: center;
+    margin: 12px 0;
 }
 .challenge-label {
-    font-size: 0.72rem; letter-spacing: 0.12em;
-    text-transform: uppercase; color: #d4af37;
-    font-weight: 700; margin-bottom: 8px;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #d4af37;
+    font-weight: 700;
+    margin-bottom: 8px;
 }
 .challenge-phrase {
     font-family: 'Syne', sans-serif;
-    font-size: 1.4rem; font-weight: 700; color: #ffffff;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #ffffff;
 }
 
 .result-granted {
     background: rgba(0,200,130,0.09);
     border: 2px solid rgba(0,200,130,0.4);
-    border-radius: 16px; padding: 22px;
+    border-radius: 16px;
+    padding: 22px;
     text-align: center;
     font-family: 'Syne', sans-serif;
-    font-size: 1.5rem; font-weight: 800; color: #00c882;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #00c882;
     box-shadow: 0 0 30px rgba(0,200,130,0.15);
 }
 .result-denied {
     background: rgba(220,0,40,0.09);
     border: 2px solid rgba(220,0,40,0.4);
-    border-radius: 16px; padding: 22px;
+    border-radius: 16px;
+    padding: 22px;
     text-align: center;
     font-family: 'Syne', sans-serif;
-    font-size: 1.5rem; font-weight: 800; color: #ff3355;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #ff3355;
     box-shadow: 0 0 30px rgba(220,0,40,0.15);
+}
+
+.record-note {
+    text-align: center;
+    font-size: 0.95rem;
+    color: rgba(255,220,210,0.85);
+    margin-bottom: 12px;
+    font-weight: 600;
+}
+
+.section-head {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #d4af37;
+    margin-bottom: 4px;
+    letter-spacing: 0.04em;
 }
 
 .stTextInput > div > div > input {
     background: rgba(255,255,255,0.05) !important;
     border: 1px solid rgba(212,175,55,0.25) !important;
-    border-radius: 12px !important; color: white !important;
+    border-radius: 12px !important;
+    color: white !important;
 }
 .stTextInput > div > div > input:focus {
     border-color: #e8003d !important;
@@ -128,24 +176,21 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 
 .stButton > button {
     background: linear-gradient(135deg, #c0001f, #8b0000) !important;
-    color: white !important; border: none !important;
-    border-radius: 12px !important; font-weight: 700 !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 12px !important;
+    font-weight: 700 !important;
     box-shadow: 0 4px 16px rgba(192,0,31,0.3) !important;
 }
 
-.section-head {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.1rem; font-weight: 700;
-    color: #d4af37; margin-bottom: 4px;
-    letter-spacing: 0.04em;
+[data-testid="stMetricLabel"] {
+    color: rgba(255,220,210,0.7) !important;
+    font-size: 0.8rem !important;
 }
-
-[data-testid="stMetricLabel"] { color: rgba(255,220,210,0.7) !important; font-size: 0.8rem !important; }
-[data-testid="stMetricValue"] { color: white !important; font-family: 'Syne', sans-serif !important; }
-
-hr { border-color: rgba(212,175,55,0.15) !important; }
-.stCaption { color: rgba(255,220,210,0.55) !important; }
-audio { border-radius: 10px; width: 100%; }
+[data-testid="stMetricValue"] {
+    color: white !important;
+    font-family: 'Syne', sans-serif !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -278,9 +323,9 @@ with tab_enroll:
     <div class="tips-box">
         <b>Recording Tips:</b><br>
         • Speak clearly and naturally for 2–4 seconds<br>
+        • Stop speaking and wait 1 second<br>
         • Record in a quiet environment<br>
-        • Use the same device for login<br>
-        • Keep similar mic distance
+        • Use the same device for login
     </div>
     """, unsafe_allow_html=True)
 
@@ -325,16 +370,27 @@ with tab_enroll:
                         Sample {done + 1} of {total}
                     </span><br>
                     <span style="color:rgba(255,220,210,0.7); font-size:0.9rem;">
-                        Click record and speak for 2–4 seconds
+                        Click the mic below and speak for 2–4 seconds
                     </span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-            audio = st.audio_input(f"🎤 Record Sample {done + 1}", key=f"enroll_audio_{done}")
+            st.markdown('<div class="record-note">🎤 Tap the mic below to record</div>', unsafe_allow_html=True)
 
-            if audio is not None:
-                audio_bytes = audio.read()
+            audio_bytes = audio_recorder(
+                text="",
+                recording_color="#e8003d",
+                neutral_color="#d4af37",
+                icon_name="microphone",
+                icon_size="2x",
+                pause_threshold=0.8,
+                sample_rate=16000,
+                key=f"enroll_audio_{done}"
+            )
+
+            if audio_bytes:
+                st.audio(audio_bytes, format="audio/wav")
                 current_hash = hash(audio_bytes[:500])
 
                 if st.session_state.last_enroll_hash != current_hash:
@@ -413,28 +469,39 @@ with tab_login:
                         Verification Audio
                     </span><br>
                     <span style="color:rgba(255,220,210,0.7); font-size:0.88rem;">
-                        Click record and say the phrase above
+                        Click the mic and say the phrase above
                     </span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-            verify_audio = st.audio_input("🎤 Record Verification", key="verify_audio_input")
+            st.markdown('<div class="record-note">🎤 Tap the mic below to verify</div>', unsafe_allow_html=True)
 
-            if verify_audio is not None:
-                audio_bytes = verify_audio.read()
-                current_hash = hash(audio_bytes[:500])
+            verify_audio_bytes = audio_recorder(
+                text="",
+                recording_color="#e8003d",
+                neutral_color="#d4af37",
+                icon_name="microphone",
+                icon_size="2x",
+                pause_threshold=0.8,
+                sample_rate=16000,
+                key="verify_audio_input"
+            )
+
+            if verify_audio_bytes:
+                st.audio(verify_audio_bytes, format="audio/wav")
+                current_hash = hash(verify_audio_bytes[:500])
 
                 if st.session_state.last_verify_hash != current_hash:
                     with st.spinner("🔍 Analysing voice..."):
                         try:
-                            test_emb = extract_embedding(audio_bytes)
+                            test_emb = extract_embedding(verify_audio_bytes)
                             scores = [cosine_sim(e, test_emb) for e in stored]
                             best_score = max(scores)
                             avg_score = round(sum(scores) / len(scores), 3)
                             voice_passed = best_score >= VOICE_THRESHOLD
 
-                            spoken_text = transcribe_audio(audio_bytes)
+                            spoken_text = transcribe_audio(verify_audio_bytes)
                             ratio = phrase_ratio(spoken_text, st.session_state.challenge_phrase)
                             phrase_passed = ratio >= PHRASE_THRESHOLD
 
