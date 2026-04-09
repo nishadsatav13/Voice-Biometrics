@@ -221,7 +221,7 @@ encoder = load_encoder()
 whisper = load_whisper()
 
 # ─────────────────────────────────────────────
-# COMPATIBLE AUDIO INPUT (IMPORTANT FIX)
+# COMPATIBLE AUDIO INPUT
 # ─────────────────────────────────────────────
 def get_audio_input(label, key):
     if hasattr(st, "audio_input"):
@@ -236,7 +236,7 @@ def get_audio_input(label, key):
 # HELPERS
 # ─────────────────────────────────────────────
 def sanitize(name: str) -> str:
-    return re.sub(r"[^a-zA-Z0-9_\\-]", "", name.strip().lower())
+    return re.sub(r"[^a-zA-Z0-9_\-]", "", name.strip().lower())
 
 def extract_embedding(audio_bytes: bytes) -> np.ndarray:
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
@@ -276,15 +276,15 @@ def transcribe_audio(audio_bytes: bytes) -> str:
             vad_parameters=dict(min_silence_duration_ms=200)
         )
         text = " ".join(s.text for s in segments).strip().lower()
-        text = re.sub(r"[^a-z0-9\\s]", "", text)
-        return re.sub(r"\\s+", " ", text).strip()
+        text = re.sub(r"[^a-z0-9\s]", "", text)
+        return re.sub(r"\s+", " ", text).strip()
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)
 
 def phrase_ratio(spoken: str, expected: str) -> float:
     sw = set(spoken.split())
-    ew = set(re.sub(r"[^a-z0-9\\s]", "", expected.lower()).split())
+    ew = set(re.sub(r"[^a-z0-9\s]", "", expected.lower()).split())
     return len(sw & ew) / len(ew) if ew else 0.0
 
 def list_users():
@@ -344,14 +344,17 @@ with tab_enroll:
         done = len(st.session_state.enroll_embeddings)
         total = NUM_SAMPLES
 
-        if done >= total:
-            st.progress(1.0, text=f"Voice samples: {total} / {total}")
-            dots = "🟢 🟢 🟢 🟢 🟢"
-        else:
-            st.progress(done / total, text=f"Voice samples: {done} / {total}")
-            dots = "".join(["🟢 " if i < done else ("🔴 " if i == done else "⚪ ") for i in range(total)])
+        # FIXED PLACEHOLDER PROGRESS BLOCK
+        progress_placeholder = st.empty()
+        with progress_placeholder.container():
+            if done >= total:
+                st.progress(1.0, text=f"Voice samples: {total} / {total}")
+                dots = "🟢 🟢 🟢 🟢 🟢"
+            else:
+                st.progress(done / total, text=f"Voice samples: {done} / {total}")
+                dots = "".join(["🟢 " if i < done else ("🔴 " if i == done else "⚪ ") for i in range(total)])
 
-        st.markdown(f'<div class="dots-row">{dots}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="dots-row">{dots}</div>', unsafe_allow_html=True)
 
         enroll_path = os.path.join(USER_DIR, f"{username}.npy")
         already_done = os.path.exists(enroll_path) and done == 0
@@ -400,8 +403,11 @@ with tab_enroll:
                                 all_emb = np.array(st.session_state.enroll_embeddings[:total], dtype=np.float32)
                                 np.save(enroll_path, all_emb)
 
-                                st.progress(1.0, text=f"Voice samples: {total} / {total}")
-                                st.markdown('<div class="dots-row">🟢 🟢 🟢 🟢 🟢</div>', unsafe_allow_html=True)
+                                # FIXED: replace old 4/5 block instead of stacking
+                                progress_placeholder.empty()
+                                with progress_placeholder.container():
+                                    st.progress(1.0, text=f"Voice samples: {total} / {total}")
+                                    st.markdown('<div class="dots-row">🟢 🟢 🟢 🟢 🟢</div>', unsafe_allow_html=True)
 
                                 st.balloons()
                                 st.success(f"🎉 **{username}** enrolled successfully with {total} samples!")
@@ -488,7 +494,8 @@ with tab_login:
                             best_score = max(scores)
                             avg_score = round(sum(scores) / len(scores), 3)
 
-                            voice_passed = best_score >= VOICE_THRESHOLD
+                            # BETTER DEMO-SAFE VOICE PASS LOGIC
+                            voice_passed = (best_score >= VOICE_THRESHOLD) or (avg_score >= 0.72)
 
                             spoken_text = transcribe_audio(audio_bytes)
                             ratio = phrase_ratio(spoken_text, st.session_state.challenge_phrase)
