@@ -19,7 +19,7 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────
-# CUSTOM CSS
+# CUSTOM CSS (red-black-gold theme)
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -30,14 +30,14 @@ st.markdown("""
     }
 
     .main {
-        background-color: #0a0e1a;
+        background: linear-gradient(180deg, #090909 0%, #120707 100%);
     }
 
     .title-text {
         font-family: 'Syne', sans-serif;
-        font-size: 2.4rem;
+        font-size: 2.5rem;
         font-weight: 800;
-        background: linear-gradient(135deg, #ffffff 20%, #4f9eff 80%);
+        background: linear-gradient(135deg, #ffffff 10%, #ff3b3b 55%, #d4af37 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         text-align: center;
@@ -46,31 +46,47 @@ st.markdown("""
 
     .subtitle-text {
         text-align: center;
-        color: rgba(200,210,255,0.65);
+        color: rgba(255,235,220,0.72);
         font-size: 0.95rem;
         margin-bottom: 1.8rem;
     }
 
-    .info-box {
-        background: rgba(79,158,255,0.08);
-        border: 1px solid rgba(79,158,255,0.25);
-        border-radius: 16px;
-        padding: 16px 20px;
-        margin: 12px 0;
+    .tips-box {
+        background: rgba(255, 59, 59, 0.08);
+        border-left: 4px solid #ff3b3b;
+        border-radius: 12px;
+        padding: 14px 18px;
+        margin: 14px 0;
+        color: rgba(255,240,235,0.92);
     }
 
     .record-box {
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(255,255,255,0.035);
+        border: 1px solid rgba(212,175,55,0.20);
         border-radius: 18px;
-        padding: 18px 20px;
+        padding: 20px;
         margin: 16px 0;
         text-align: center;
+        box-shadow: 0 0 24px rgba(255,59,59,0.08);
+    }
+
+    .record-title {
+        font-family: 'Syne', sans-serif;
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #ffffff;
+        margin-bottom: 6px;
+    }
+
+    .record-sub {
+        color: rgba(255,235,220,0.75);
+        font-size: 0.95rem;
+        margin-bottom: 12px;
     }
 
     .challenge-box {
-        background: rgba(79,158,255,0.08);
-        border: 1px solid rgba(79,158,255,0.3);
+        background: rgba(255, 59, 59, 0.08);
+        border: 1px solid rgba(212,175,55,0.28);
         border-radius: 16px;
         padding: 18px 24px;
         text-align: center;
@@ -81,7 +97,7 @@ st.markdown("""
         font-size: 0.75rem;
         letter-spacing: 0.1em;
         text-transform: uppercase;
-        color: #4f9eff;
+        color: #d4af37;
         font-weight: 700;
         margin-bottom: 6px;
     }
@@ -94,8 +110,8 @@ st.markdown("""
     }
 
     .result-granted {
-        background: rgba(0,212,170,0.1);
-        border: 1px solid rgba(0,212,170,0.4);
+        background: rgba(0,212,170,0.08);
+        border: 1px solid rgba(0,212,170,0.35);
         border-radius: 16px;
         padding: 20px;
         text-align: center;
@@ -106,24 +122,15 @@ st.markdown("""
     }
 
     .result-denied {
-        background: rgba(255,79,110,0.1);
-        border: 1px solid rgba(255,79,110,0.4);
+        background: rgba(255,79,110,0.09);
+        border: 1px solid rgba(255,79,110,0.35);
         border-radius: 16px;
         padding: 20px;
         text-align: center;
         font-family: 'Syne', sans-serif;
         font-size: 1.45rem;
         font-weight: 800;
-        color: #ff4f6e;
-    }
-
-    .tips-box {
-        background: rgba(255,255,255,0.04);
-        border-left: 4px solid #4f9eff;
-        border-radius: 12px;
-        padding: 14px 18px;
-        margin: 14px 0;
-        color: rgba(230,235,255,0.88);
+        color: #ff5c74;
     }
 
     .wave {
@@ -133,12 +140,13 @@ st.markdown("""
         gap: 6px;
         height: 40px;
         margin-top: 10px;
+        margin-bottom: 6px;
     }
 
     .bar {
         width: 6px;
         border-radius: 10px;
-        background: linear-gradient(180deg, #4f9eff, #9b7bff);
+        background: linear-gradient(180deg, #ff3b3b, #d4af37);
         animation: pulse 1s infinite ease-in-out;
     }
 
@@ -152,6 +160,18 @@ st.markdown("""
         0%, 100% { transform: scaleY(0.6); opacity: 0.6; }
         50% { transform: scaleY(1.15); opacity: 1; }
     }
+
+    .record-label {
+        display: inline-block;
+        background: linear-gradient(135deg, #ff3b3b, #a30000);
+        color: white;
+        padding: 10px 18px;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 0.95rem;
+        margin-bottom: 8px;
+        box-shadow: 0 6px 20px rgba(255,59,59,0.25);
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -161,22 +181,21 @@ st.markdown("""
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 USER_DIR = os.path.join(BASE_DIR, "data", "users")
 
-# Accuracy tuned thresholds
-BEST_SCORE_THRESHOLD = 0.80
-AVG_SCORE_THRESHOLD = 0.74
+BEST_SCORE_THRESHOLD = 0.81
+AVG_SCORE_THRESHOLD = 0.75
 PHRASE_THRESHOLD = 0.80
 NUM_SAMPLES = 5
 MIN_TRANSCRIBED_WORDS = 2
 
 CHALLENGE_PHRASES = [
-    "my voice is my password",
-    "unlock the system now",
-    "voice authentication enabled",
-    "identity verified successfully",
-    "this is my voice key",
-    "secure access granted",
-    "grant me access today",
-    "open sesame right now",
+    "hello my name is secure",
+    "today is a good day",
+    "open the voice lock",
+    "this is my access key",
+    "let me log in",
+    "verify my identity",
+    "my voice is unique",
+    "grant access now",
 ]
 
 os.makedirs(USER_DIR, exist_ok=True)
@@ -240,7 +259,7 @@ def transcribe(audio_bytes: bytes) -> str:
             language="en",
             beam_size=5,
             vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=300)
+            vad_parameters=dict(min_silence_duration_ms=250)
         )
         text = " ".join(s.text for s in segments).strip().lower()
         for ch in ",.!?":
@@ -305,15 +324,15 @@ tab_enroll, tab_login = st.tabs(["🧬 Enroll", "🔐 Login"])
 # ═══════════════════════════════════════════════
 with tab_enroll:
     st.subheader("Create Voice Profile")
-    st.caption("Record 5 voice samples to register your biometric identity.")
+    st.caption("Record 5 short voice samples to register your identity.")
 
     st.markdown("""
     <div class="tips-box">
         <b>Best recording tips:</b><br>
         • Speak clearly for 3–4 seconds<br>
-        • Use the same room + same device<br>
-        • Avoid fan / traffic / background noise<br>
-        • Keep your speaking style natural
+        • After clicking record, speak naturally and stop<br>
+        • Recording auto-finishes after short speech / silence<br>
+        • Use the same room and device for best results
     </div>
     """, unsafe_allow_html=True)
 
@@ -339,7 +358,7 @@ with tab_enroll:
             if i < done:
                 dots += "🟢 "
             elif i == done:
-                dots += "🔵 "
+                dots += "🔴 "
             else:
                 dots += "⚪ "
         st.markdown(f"**{dots}**")
@@ -362,10 +381,9 @@ with tab_enroll:
             if done < total:
                 st.markdown(f"""
                 <div class="record-box">
-                    <h4 style="margin-bottom:6px;">🎤 Record Sample {done + 1} of {total}</h4>
-                    <p style="color:rgba(220,225,255,0.75); margin-bottom:10px;">
-                        Press the microphone button below and speak naturally.
-                    </p>
+                    <div class="record-label">RECORD</div>
+                    <div class="record-title">Sample {done + 1} of {total}</div>
+                    <div class="record-sub">Tap record, speak for about 3–4 seconds, then pause.</div>
                     <div class="wave">
                         <div class="bar"></div>
                         <div class="bar"></div>
@@ -376,22 +394,19 @@ with tab_enroll:
                 </div>
                 """, unsafe_allow_html=True)
 
-                st.markdown("### 🎙️ Start Recording")
-
                 audio_bytes = audio_recorder(
-                    text="Click mic → record → stop",
-                    recording_color="#ff4b4b",
-                    neutral_color="#6c63ff",
+                    text="Record",
+                    recording_color="#ff3b3b",
+                    neutral_color="#d4af37",
                     icon_name="microphone",
-                    icon_size="3x",
-                    pause_threshold=2.5,
+                    icon_size="2x",
+                    pause_threshold=1.2,
                     sample_rate=41000,
                     key=f"enroll_audio_{done}"
                 )
 
                 if audio_bytes:
                     st.audio(audio_bytes, format="audio/wav")
-
                     current_audio_id = hash(audio_bytes)
 
                     if st.session_state.last_enroll_audio_id != current_audio_id:
@@ -430,7 +445,7 @@ with tab_enroll:
 # ═══════════════════════════════════════════════
 with tab_login:
     st.subheader("Voice Verification")
-    st.caption("Speak the challenge phrase to authenticate your identity.")
+    st.caption("Speak the phrase shown below to verify your identity.")
 
     login_input = st.text_input("Username", placeholder="Enter your username", key="login_user")
     login_user = sanitize_username(login_input)
@@ -454,7 +469,7 @@ with tab_login:
             with col1:
                 st.markdown(f'''
                 <div class="challenge-box">
-                    <div class="challenge-label">🔐 Speak this phrase</div>
+                    <div class="challenge-label">Speak this phrase</div>
                     <div class="challenge-phrase">"{st.session_state.challenge_phrase}"</div>
                 </div>
                 ''', unsafe_allow_html=True)
@@ -469,10 +484,9 @@ with tab_login:
 
             st.markdown("""
             <div class="record-box">
-                <h4 style="margin-bottom:6px;">🎤 Verify Identity</h4>
-                <p style="color:rgba(220,225,255,0.75); margin-bottom:10px;">
-                    Record yourself speaking the phrase above.
-                </p>
+                <div class="record-label">RECORD</div>
+                <div class="record-title">Verification Audio</div>
+                <div class="record-sub">Tap record and speak the phrase clearly in one go.</div>
                 <div class="wave">
                     <div class="bar"></div>
                     <div class="bar"></div>
@@ -483,22 +497,19 @@ with tab_login:
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown("### 🎙️ Start Verification Recording")
-
             verify_audio_bytes = audio_recorder(
-                text="Click mic → speak phrase → stop",
-                recording_color="#ff4b4b",
-                neutral_color="#00d4aa",
+                text="Record",
+                recording_color="#ff3b3b",
+                neutral_color="#d4af37",
                 icon_name="microphone",
-                icon_size="3x",
-                pause_threshold=2.5,
+                icon_size="2x",
+                pause_threshold=1.2,
                 sample_rate=41000,
                 key="verify_audio"
             )
 
             if verify_audio_bytes:
                 st.audio(verify_audio_bytes, format="audio/wav")
-
                 current_verify_audio_id = hash(verify_audio_bytes)
 
                 if st.session_state.last_verify_audio_id != current_verify_audio_id:
@@ -536,13 +547,13 @@ with tab_login:
                             st.caption(f'**Expected:** *"{st.session_state.challenge_phrase}"*')
 
                             if not enough_speech:
-                                st.warning("⚠️ Very little speech detected. Please speak clearly and slightly longer.")
+                                st.warning("⚠️ Very little speech detected. Speak clearly for 3–4 seconds.")
                             elif not voice_passed and phrase_passed:
                                 st.warning("⚠️ Phrase matched, but voice similarity was not strong enough.")
                             elif voice_passed and not phrase_passed:
-                                st.warning("⚠️ Voice matched, but spoken phrase did not match enough words.")
+                                st.warning("⚠️ Voice matched, but phrase did not match enough words.")
                             elif not access_granted:
-                                st.warning("⚠️ Authentication failed. Please try again in a quieter environment.")
+                                st.warning("⚠️ Authentication failed. Try again clearly in a quieter environment.")
 
                             st.session_state.challenge_phrase = random.choice(CHALLENGE_PHRASES)
 
