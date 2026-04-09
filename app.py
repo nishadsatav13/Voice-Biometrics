@@ -1,370 +1,199 @@
 import os
-import io
+import re
 import random
 import tempfile
+import time
+from typing import Optional
+
 import numpy as np
 from numpy.linalg import norm
-import streamlit as st
-from resemblyzer import VoiceEncoder, preprocess_wav
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from faster_whisper import WhisperModel
+from resemblyzer import VoiceEncoder, preprocess_wav
+import uvicorn
 
-# ─────────────────────────────────────────────
-#  PAGE CONFIG
-# ─────────────────────────────────────────────
-st.set_page_config(
-    page_title="VoiceAuth — Biometric Authentication",
-    page_icon="🎙️",
-    layout="centered"
+# =========================
+# APP SETUP
+# =========================
+
+app = FastAPI(title="Voice Biometrics API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# ─────────────────────────────────────────────
-#  CUSTOM CSS
-# ─────────────────────────────────────────────
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap');
+# =========================
+# CONFIG
+# =========================
 
-    html, body, [class*="css"] {
-        font-family: 'DM Sans', sans-serif;
-    }
-    .main { background-color: #0a0e1a; }
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+USER_DIR = os.path.join(BASE_DIR, "data", "users")
 
-    .title-text {
-        font-family: 'Syne', sans-serif;
-        font-size: 2.2rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #ffffff 30%, #4f9eff);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        margin-bottom: 0;
-    }
-    .subtitle-text {
-        text-align: center;
-        color: rgba(200,210,255,0.6);
-        font-size: 0.9rem;
-        margin-bottom: 2rem;
-    }
-    .result-granted {
-        background: rgba(0,212,170,0.1);
-        border: 1px solid rgba(0,212,170,0.4);
-        border-radius: 16px;
-        padding: 20px;
-        text-align: center;
-        font-family: 'Syne', sans-serif;
-        font-size: 1.4rem;
-        font-weight: 800;
-        color: #00d4aa;
-    }
-    .result-denied {
-        background: rgba(255,79,110,0.1);
-        border: 1px solid rgba(255,79,110,0.4);
-        border-radius: 16px;
-        padding: 20px;
-        text-align: center;
-        font-family: 'Syne', sans-serif;
-        font-size: 1.4rem;
-        font-weight: 800;
-        color: #ff4f6e;
-    }
-    .challenge-box {
-        background: rgba(79,158,255,0.08);
-        border: 1px solid rgba(79,158,255,0.3);
-        border-radius: 14px;
-        padding: 18px 24px;
-        text-align: center;
-        margin: 1rem 0;
-    }
-    .challenge-label {
-        font-size: 0.75rem;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: #4f9eff;
-        font-weight: 600;
-        margin-bottom: 6px;
-    }
-    .challenge-phrase {
-        font-family: 'Syne', sans-serif;
-        font-size: 1.3rem;
-        font-weight: 700;
-        color: white;
-    }
-    .metric-card {
-        background: rgba(255,255,255,0.05);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 12px;
-        padding: 14px;
-        text-align: center;
-    }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background: rgba(255,255,255,0.05);
-        padding: 6px;
-        border-radius: 14px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 10px;
-        font-family: 'Syne', sans-serif;
-        font-weight: 600;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────
-#  CONFIG
-# ─────────────────────────────────────────────
-BASE_DIR         = os.path.dirname(os.path.abspath(__file__))
-USER_DIR         = os.path.join(BASE_DIR, "data", "users")
-VOICE_THRESHOLD  = 0.78
+VOICE_THRESHOLD = 0.72
 PHRASE_THRESHOLD = 0.75
-NUM_SAMPLES      = 5
+NUM_SAMPLES = 5
+CHALLENGE_EXPIRY_SECONDS = 120  # 2 min
 
 CHALLENGE_PHRASES = [
     "my voice is my password",
     "unlock the system now",
+    "secure access granted",
     "voice authentication enabled",
     "identity verified successfully",
-    "this is my voice key",
-    "secure access granted",
-    "grant me access today",
     "open sesame right now",
+    "grant me access today",
+    "this is my voice key",
 ]
 
 os.makedirs(USER_DIR, exist_ok=True)
 
-# ─────────────────────────────────────────────
-#  LOAD MODELS (cached so they load only once)
-# ─────────────────────────────────────────────
-@st.cache_resource
-def load_encoder():
-    return VoiceEncoder()
+# Stores: username -> {"phrase": "...", "created_at": ...}
+active_challenges = {}
 
-@st.cache_resource
-def load_whisper():
-    return WhisperModel("base", device="cpu", compute_type="int8")
+# =========================
+# LOAD MODELS ONCE
+# =========================
 
-encoder = load_encoder()
-whisper = load_whisper()
+print("⏳ Loading Resemblyzer...")
+encoder = VoiceEncoder()
+print("✅ Resemblyzer ready.")
 
-# ─────────────────────────────────────────────
-#  HELPERS
-# ─────────────────────────────────────────────
-def extract_embedding(audio_bytes: bytes) -> np.ndarray:
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-        f.write(audio_bytes)
-        tmp_path = f.name
-    wav = preprocess_wav(tmp_path)
+print("⏳ Loading Faster-Whisper...")
+whisper = WhisperModel("base", device="cpu", compute_type="int8")
+print("✅ Faster-Whisper ready.")
+
+# =========================
+# HELPERS
+# =========================
+
+def sanitize_username(username: str) -> str:
+    username = username.strip().lower()
+    username = re.sub(r"[^a-zA-Z0-9_-]", "", username)
+    return username
+
+def get_user_file_path(username: str) -> str:
+    return os.path.join(USER_DIR, f"{username}.npy")
+
+def get_temp_embedding_path(username: str, sample_index: int) -> str:
+    return os.path.join(USER_DIR, f"{username}_tmp_{sample_index}.npy")
+
+def extract_embedding(audio_path: str) -> np.ndarray:
+    wav = preprocess_wav(audio_path)
     emb = encoder.embed_utterance(wav)
-    os.unlink(tmp_path)
-    n = norm(emb)
-    return emb / n if n != 0 else emb
+    emb = emb / (norm(emb) + 1e-10)
+    return emb.astype(np.float32)
 
-def cosine_similarity(a, b):
-    a, b = np.array(a).flatten(), np.array(b).flatten()
-    d = norm(a) * norm(b)
-    return float(np.dot(a, b) / d) if d != 0 else 0.0
+def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    a = a.flatten()
+    b = b.flatten()
+    denom = (norm(a) * norm(b)) + 1e-10
+    return float(np.dot(a, b) / denom)
 
-def load_embeddings(username: str):
-    path = os.path.join(USER_DIR, f"{username}.npy")
+def load_embeddings(username: str) -> Optional[np.ndarray]:
+    path = get_user_file_path(username)
     if not os.path.exists(path):
         return None
-    emb = np.load(path, allow_pickle=True)
-    return emb.reshape(1, -1) if emb.ndim == 1 else emb
+    emb = np.load(path, allow_pickle=False)
+    if emb.ndim == 1:
+        emb = emb.reshape(1, -1)
+    return emb
 
-def transcribe(audio_bytes: bytes) -> str:
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-        f.write(audio_bytes)
-        tmp_path = f.name
+def transcribe(audio_path: str) -> str:
     segments, _ = whisper.transcribe(
-        tmp_path, language="en", beam_size=5,
+        audio_path,
+        language="en",
+        beam_size=5,
         vad_filter=True,
-        vad_parameters=dict(min_silence_duration_ms=300)
+        vad_parameters=dict(min_silence_duration_ms=300),
     )
-    text = " ".join(s.text for s in segments).strip().lower()
-    os.unlink(tmp_path)
+    text = " ".join(segment.text for segment in segments).strip().lower()
     for ch in ",.!?":
         text = text.replace(ch, "")
     return text
 
-def phrase_match_ratio(spoken: str, expected: str) -> float:
-    sw = set(spoken.split())
-    ew = set(expected.split())
-    if not ew:
-        return 0.0
-    return len(sw & ew) / len(ew)
+def phrase_matches(spoken: str, expected: str) -> tuple[bool, float]:
+    spoken_words = set(spoken.split())
+    expected_words = set(expected.split())
 
+    if not expected_words:
+        return False, 0.0
+
+    ratio = len(spoken_words & expected_words) / len(expected_words)
+    ratio = round(ratio, 3)
+    return ratio >= PHRASE_THRESHOLD, ratio
+
+async def save_audio_temp(file: UploadFile) -> str:
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file uploaded.")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    suffix = ".wav"
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    try:
+        tmp.write(content)
+        tmp.flush()
+    finally:
+        tmp.close()
+
+    return tmp.name
+
+def cleanup_temp_enrollment_files(username: str):
+    for i in range(NUM_SAMPLES):
+        temp_path = get_temp_embedding_path(username, i)
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+def challenge_is_expired(created_at: float) -> bool:
+    return (time.time() - created_at) > CHALLENGE_EXPIRY_SECONDS
+
+# =========================
+# ROUTES
+# =========================
+
+@app.get("/")
+def root():
+    return {
+        "message": "Voice Biometrics API running ✅",
+        "voice_threshold": VOICE_THRESHOLD,
+        "phrase_threshold": PHRASE_THRESHOLD,
+        "num_samples_required": NUM_SAMPLES,
+    }
+
+@app.get("/users")
 def list_users():
-    return [f.replace(".npy", "") for f in os.listdir(USER_DIR) if f.endswith(".npy")]
+    files = os.listdir(USER_DIR)
+    users = sorted([f.replace(".npy", "") for f in files if f.endswith(".npy") and "_tmp_" not in f])
+    return {"users": users, "count": len(users)}
 
-# ─────────────────────────────────────────────
-#  HEADER
-# ─────────────────────────────────────────────
-st.markdown('<div class="title-text">🎙 VoiceAuth</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle-text">Biometric Voice Authentication System</div>', unsafe_allow_html=True)
-st.divider()
+@app.post("/enroll")
+async def enroll(
+    username: str = Form(...),
+    sample_index: int = Form(...),
+    audio: UploadFile = File(...)
+):
+    username = sanitize_username(username)
 
-# ─────────────────────────────────────────────
-#  TABS
-# ─────────────────────────────────────────────
-tab_enroll, tab_login = st.tabs(["🧬  Enroll", "🔐  Login"])
+    if not username:
+        raise HTTPException(status_code=400, detail="Invalid username.")
+    if sample_index < 0 or sample_index >= NUM_SAMPLES:
+        raise HTTPException(status_code=400, detail=f"sample_index must be between 0 and {NUM_SAMPLES - 1}.")
 
+    tmp_audio_path = await save_audio_temp(audio)
 
-# ═══════════════════════════════════════════════
-#  ENROLL TAB
-# ═══════════════════════════════════════════════
-with tab_enroll:
-    st.subheader("Create Voice Profile")
-    st.caption("Record 5 voice samples to register your biometric identity.")
+    try:
+        embedding = extract_embedding(tmp_audio_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Embedding extraction failed: {str(e)}")
+    finally:
+        if os.path.exists(tmp_audio_path):
+            os.remove(tmp_audio_path)
 
-    username = st.text_input("Username", placeholder="Enter your username", key="enroll_user")
-
-    if username:
-        # Init session state for enrollment
-        if "enroll_embeddings" not in st.session_state:
-            st.session_state.enroll_embeddings = []
-        if "enroll_username" not in st.session_state or st.session_state.enroll_username != username:
-            st.session_state.enroll_embeddings = []
-            st.session_state.enroll_username = username
-
-        done = len(st.session_state.enroll_embeddings)
-        total = NUM_SAMPLES
-
-        # Progress
-        st.progress(done / total, text=f"Samples recorded: {done} / {total}")
-
-        # Dot indicators
-        dots = ""
-        for i in range(total):
-            if i < done:
-                dots += "🟢 "
-            elif i == done:
-                dots += "🔵 "
-            else:
-                dots += "⚪ "
-        st.markdown(f"**{dots}**")
-
-        if done < total:
-            st.info(f"🎤 Record sample **{done + 1} of {total}** — speak naturally for 3–4 seconds")
-            audio = st.audio_input(f"Sample {done + 1}", key=f"enroll_audio_{done}")
-
-            if audio is not None:
-                audio_bytes = audio.read()
-                with st.spinner("Processing voice sample..."):
-                    try:
-                        emb = extract_embedding(audio_bytes)
-                        st.session_state.enroll_embeddings.append(emb)
-                        st.success(f"✅ Sample {done + 1} recorded!")
-
-                        # Auto save on last sample
-                        if len(st.session_state.enroll_embeddings) == total:
-                            all_emb = np.array(st.session_state.enroll_embeddings)
-                            save_path = os.path.join(USER_DIR, f"{username}.npy")
-                            np.save(save_path, all_emb)
-                            st.balloons()
-                            st.success(f"🎉 **{username}** enrolled successfully with {total} voice samples!")
-                            st.session_state.enroll_embeddings = []
-                        else:
-                            st.rerun()
-                    except Exception as e:
-                        st.error(f"Error processing audio: {e}")
-        else:
-            st.success(f"✅ **{username}** is already enrolled! Go to Login tab to authenticate.")
-            if st.button("🔄 Re-enroll (overwrite)"):
-                st.session_state.enroll_embeddings = []
-                st.rerun()
-
-    # Show enrolled users
-    users = list_users()
-    if users:
-        st.divider()
-        st.caption(f"**Enrolled users:** {', '.join(users)}")
-
-
-# ═══════════════════════════════════════════════
-#  LOGIN TAB
-# ═══════════════════════════════════════════════
-with tab_login:
-    st.subheader("Voice Verification")
-    st.caption("Speak the challenge phrase to authenticate your identity.")
-
-    login_user = st.text_input("Username", placeholder="Enter your username", key="login_user")
-
-    if login_user:
-        stored = load_embeddings(login_user)
-
-        if stored is None:
-            st.warning(f"⚠️ User **{login_user}** is not enrolled. Please enroll first.")
-        else:
-            st.success(f"✅ User found — {stored.shape[0]} enrollment samples loaded.")
-
-            # Generate / show challenge phrase
-            if "challenge_phrase" not in st.session_state:
-                st.session_state.challenge_phrase = None
-
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                if st.session_state.challenge_phrase:
-                    st.markdown(f"""
-                    <div class="challenge-box">
-                        <div class="challenge-label">🔐 Speak this phrase</div>
-                        <div class="challenge-phrase">"{st.session_state.challenge_phrase}"</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-            with col2:
-                st.write("")
-                st.write("")
-                if st.button("🎲 New Phrase"):
-                    st.session_state.challenge_phrase = random.choice(CHALLENGE_PHRASES)
-                    st.rerun()
-
-            if st.session_state.challenge_phrase is None:
-                st.session_state.challenge_phrase = random.choice(CHALLENGE_PHRASES)
-                st.rerun()
-
-            # Record verification audio
-            st.info("🎤 Record your voice speaking the phrase above")
-            verify_audio = st.audio_input("Speak now", key="verify_audio")
-
-            if verify_audio is not None:
-                audio_bytes = verify_audio.read()
-                with st.spinner("🔍 Verifying identity..."):
-                    try:
-                        # Voice check
-                        test_emb   = extract_embedding(audio_bytes)
-                        scores     = [cosine_similarity(e, test_emb) for e in stored]
-                        best_score = max(scores)
-                        avg_score  = round(sum(scores) / len(scores), 3)
-                        voice_passed = best_score >= VOICE_THRESHOLD
-
-                        # Phrase check
-                        spoken_text  = transcribe(audio_bytes)
-                        ratio        = phrase_match_ratio(spoken_text, st.session_state.challenge_phrase)
-                        phrase_passed = ratio >= PHRASE_THRESHOLD
-
-                        access_granted = voice_passed and phrase_passed
-
-                        # ── Result display ──────────────────────────────
-                        st.divider()
-                        if access_granted:
-                            st.markdown('<div class="result-granted">✅ ACCESS GRANTED</div>', unsafe_allow_html=True)
-                        else:
-                            st.markdown('<div class="result-denied">❌ ACCESS DENIED</div>', unsafe_allow_html=True)
-
-                        st.write("")
-
-                        # Metrics
-                        c1, c2, c3, c4 = st.columns(4)
-                        c1.metric("Voice Score", f"{best_score:.3f}", f"threshold {VOICE_THRESHOLD}")
-                        c2.metric("Voice Match", "✅ PASS" if voice_passed  else "❌ FAIL")
-                        c3.metric("Phrase Match", "✅ PASS" if phrase_passed else "❌ FAIL")
-                        c4.metric("Word Overlap", f"{ratio*100:.0f}%")
-
-                        # What was spoken
-                        st.caption(f"**You said:** *\"{spoken_text if spoken_text else 'nothing detected'}\"*")
-                        st.caption(f"**Expected:** *\"{st.session_state.challenge_phrase}\"*")
-
-                        # New challenge after attempt
-                        st.session_state.challenge_phrase = random.choice(CHALLENGE_PHRASES)
-
-                    except Exception as e:
-                        st.error(f"Verification error: {e}")
+    # Save this sample temporarily
