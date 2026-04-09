@@ -191,7 +191,7 @@ html, body, [class*="css"] {
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 USER_DIR = os.path.join(BASE_DIR, "data", "users")
 
-VOICE_THRESHOLD = 0.69
+VOICE_THRESHOLD = 0.75
 PHRASE_THRESHOLD = 0.50
 NUM_SAMPLES = 5
 
